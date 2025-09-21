@@ -16,7 +16,9 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
 - TType enum (TBType protocol) controls data type.  Add a case to the type enum, including all the extension variables, and you have a new viable type.
 - All data is passed to and returned from the field in text format.  An initial value must be text, but need not be formatted.  Any offensive characters or extra length will be filtered and the string will be formatted before the data is presented in the view.
 - Data is returned from the view as a formatted text string ready for print or display.  If you need a numeric value or date value for calculations, simply filter the formatting and convert. 
-- No external dependencies 
+- No external dependencies
+- Built in Control of State Debugging Display
+- New!  Ability to group fields and check validity of the field grouping. 
 
 ## How to Run
   
@@ -324,6 +326,348 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
         }
     }
 
+## Group Validation for fields.
+- TField's group validation feature allows you to organize related form fields into logical groups and validate them collectively. This is essential for complex forms with multiple sections like personal information, addresses, payment details, etc. 
+
+
+- To use this functionality, you need to inject a GroupValidation into your view... Notice the ".withGroupValidation" statement.  The snippet is also utilizing the validator.verifyGroup method to test rather specific groups of fields are valid.  Also the validator.allGroupsValid to control rather the submit button is active.
+
+    struct UserRegistrationForm: View {
+        @State private var firstName = ""
+        @State private var lastName = ""
+        @State private var email = ""
+        @State private var street = ""
+        @State private var city = ""
+        @State private var state = ""
+        @State private var zip = ""
+        
+        var body: some View {
+            VStack {
+                Text("User Registration")
+                    .font(.title)
+                    .padding()
+            }
+            .withGroupValidation(groups: ["personal", "address"]) { validator in
+                VStack(spacing: 20) {
+                    // Personal Information Section
+                    GroupBox("Personal Information") {
+                        VStack {
+                            Tfield($firstName, type: .name, required: true,
+                                   label: "First Name", group: "personal")
+                            Tfield($lastName, type: .name, required: true,
+                                   label: "Last Name", group: "personal")
+                            Tfield($email, type: .phrase, required: true,
+                                   label: "Email", group: "personal")
+                        }
+                    }
+                    .background(
+                        validator.verifyGroup("personal") ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Address Section
+                    GroupBox("Address") {
+                        VStack {
+                            Tfield($street, type: .street, required: true,
+                                   label: "Street", group: "address")
+                            HStack {
+                                Tfield($city, type: .city, required: true,
+                                       label: "City", group: "address")
+                                Tfield($state, type: .st, required: true,
+                                       label: "State", group: "address")
+                                Tfield($zip, type: .zip, required: true,
+                                       label: "ZIP", group: "address")
+                            }
+                        }
+                    }
+                    .background(
+                        validator.verifyGroup("address") ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Submit Button
+                    Button("Create Account") {
+                        createAccount()
+                    }
+                    .disabled(!validator.allGroupsValid())
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
+        }
+        
+        private func createAccount() {
+            print("Account created successfully!")
+        }
+    }
+
+- For a more advanced example, consider the following code...
+
+    struct CheckoutForm: View {
+        // Customer Information
+        @State private var firstName = ""
+        @State private var lastName = ""
+        @State private var email = ""
+        @State private var phone = ""
+        
+        // Shipping Address
+        @State private var shipStreet = ""
+        @State private var shipCity = ""
+        @State private var shipState = ""
+        @State private var shipZip = ""
+        
+        // Billing Address
+        @State private var billStreet = ""
+        @State private var billCity = ""
+        @State private var billState = ""
+        @State private var billZip = ""
+        @State private var sameAsShipping = false
+        
+        // Payment Information
+        @State private var cardNumber = ""
+        @State private var expDate = ""
+        @State private var cvv = ""
+        
+        var body: some View {
+            ScrollView {
+                VStack(spacing: 20) {
+                    Text("Checkout")
+                        .font(.largeTitle)
+                        .padding()
+                }
+            }
+            .withGroupValidation(groups: ["customer", "shipping", "billing", "payment"]) { validator in
+                VStack(spacing: 25) {
+                    // Customer Information
+                    GroupBox("Customer Information") {
+                        VStack {
+                            HStack {
+                                Tfield($firstName, type: .name, required: true,
+                                       label: "First Name", group: "customer")
+                                Tfield($lastName, type: .name, required: true,
+                                       label: "Last Name", group: "customer")
+                            }
+                            Tfield($email, type: .phrase, required: true,
+                                   label: "Email", group: "customer")
+                            Tfield($phone, type: .phone, required: true,
+                                   label: "Phone", group: "customer")
+                        }
+                        .padding()
+                    }
+                    .background(
+                        validator.verifyGroup("customer") ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Shipping Address
+                    GroupBox("Shipping Address") {
+                        VStack {
+                            Tfield($shipStreet, type: .street, required: true,
+                                   label: "Street Address", group: "shipping")
+                            HStack {
+                                Tfield($shipCity, type: .city, required: true,
+                                       label: "City", group: "shipping")
+                                Tfield($shipState, type: .st, required: true,
+                                       label: "State", group: "shipping")
+                                Tfield($shipZip, type: .zip, required: true,
+                                       label: "ZIP", group: "shipping")
+                            }
+                        }
+                        .padding()
+                    }
+                    .background(
+                        validator.verifyGroup("shipping") ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Billing Address
+                    GroupBox("Billing Address") {
+                        VStack {
+                            Toggle("Same as shipping address", isOn: $sameAsShipping)
+                                .padding(.bottom)
+                            
+                            if !sameAsShipping {
+                                Tfield($billStreet, type: .street, required: true,
+                                       label: "Billing Street", group: "billing")
+                                HStack {
+                                    Tfield($billCity, type: .city, required: true,
+                                           label: "City", group: "billing")
+                                    Tfield($billState, type: .st, required: true,
+                                           label: "State", group: "billing")
+                                    Tfield($billZip, type: .zip, required: true,
+                                           label: "ZIP", group: "billing")
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                    .background(
+                        (validator.verifyGroup("billing") || sameAsShipping) ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Payment Information
+                    GroupBox("Payment Information") {
+                        VStack {
+                            Tfield($cardNumber, type: .credit, required: true,
+                                   label: "Card Number", group: "payment")
+                            HStack {
+                                Tfield($expDate, type: .expDate, required: true,
+                                       label: "MM/YY", group: "payment")
+                                Tfield($cvv, type: .cvv, required: true,
+                                       label: "CVV", group: "payment")
+                            }
+                        }
+                        .padding()
+                    }
+                    .background(
+                        validator.verifyGroup("payment") ? 
+                        Color.green.opacity(0.1) : Color.red.opacity(0.1)
+                    )
+                    
+                    // Validation Status
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Form Status:")
+                            .font(.headline)
+                        
+                        HStack {
+                            Image(systemName: validator.verifyGroup("customer") ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(validator.verifyGroup("customer") ? .green : .red)
+                            Text("Customer Info (\(validator.groupCount("customer")) fields)")
+                        }
+                        
+                        HStack {
+                            Image(systemName: validator.verifyGroup("shipping") ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(validator.verifyGroup("shipping") ? .green : .red)
+                            Text("Shipping Address (\(validator.groupCount("shipping")) fields)")
+                        }
+                        
+                        HStack {
+                            Image(systemName: (validator.verifyGroup("billing") || sameAsShipping) ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor((validator.verifyGroup("billing") || sameAsShipping) ? .green : .red)
+                            Text("Billing Address")
+                        }
+                        
+                        HStack {
+                            Image(systemName: validator.verifyGroup("payment") ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(validator.verifyGroup("payment") ? .green : .red)
+                            Text("Payment Info (\(validator.groupCount("payment")) fields)")
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                    
+                    // Submit Button
+                    Button("Complete Order") {
+                        completeOrder()
+                    }
+                    .disabled(!isFormValid(validator))
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top)
+                }
+                .padding()
+            }
+        }
+        
+        private func isFormValid(_ validator: GroupValidator) -> Bool {
+            return validator.verifyGroup("customer") &&
+                   validator.verifyGroup("shipping") &&
+                   (validator.verifyGroup("billing") || sameAsShipping) &&
+                   validator.verifyGroup("payment")
+        }
+        
+        private func completeOrder() {
+            print("Order completed successfully!")
+        }
+    }
+
+- Core Validation Methods...
+
+    // Check if a specific group is valid
+    let isPersonalValid = validator.verifyGroup("personal")
+
+    // Get the number of fields in a group
+    let fieldCount = validator.groupCount("personal")
+
+    // Check if all monitored groups are valid
+    let allValid = validator.allGroupsValid()
+    
+    #if DEBUG
+    validator.debugGroupState("personal") // used for debugging
+    #endif
+
+- Status Displays in real time...
+
+    VStack {
+        Text("Personal: \(validator.verifyGroup("personal") ? "✅ Valid" : "❌ Invalid")")
+        Text("Address: \(validator.verifyGroup("address") ? "✅ Valid" : "❌ Invalid")")
+        Text("Payment: \(validator.verifyGroup("payment") ? "✅ Valid" : "❌ Invalid")")
+        Text("Ready to submit: \(validator.allGroupsValid() ? "✅" : "❌")")
+    }
+
+- Group Names: Case sensitive...  Personal ≠ personal
+- Choose descriptive, consistent names
+- Common patterns... "personal", "address", "payment"
+
+- Fields specify their group using the group parameter
+- Fields without a group do not participate in group validation
+- One field can only belong to one group.
+
+- Empty Groups: Return true (no fields = no errors)
+- Required Fields Must have valid, complete content
+- Optional Fields Valid when empty or when containing valid, complete content
+
+- Group validates status updates every 0.5 seconds
+- UI elements that depend on validation status will update reactively
+- Background colors, button states, and status incators update in real time
+
+- Batched updates: Rapid field changes are batched to reduce computational overhead
+- Automatic Cleanup - Validation managers deallocate when views disappear
+- Memory Efficient - No persistent global state.  Each from gets its own validation context
+- Power Conscious - timers only run when validation is active
+
+- Best Practices...
+
+    // Good: Logical grouping
+    .withGroupValidation(groups: ["personal", "address", "payment"])
+
+    // Avoid: Too many small groups
+    .withGroupValidation(groups: ["firstName", "lastName", "email", "phone"])
+    
+    // Good: Subtle background colors
+    .background(validator.verifyGroup("personal") ? 
+        Color.green.opacity(0.1) : Color.red.opacity(0.1))
+
+    // Good: Icons with status
+    Image(systemName: validator.verifyGroup("address") ? 
+        "checkmark.circle.fill" : "xmark.circle.fill")
+        
+    // Good: Disable until all groups valid
+    Button("Submit") {
+        submitForm()
+    }
+    .disabled(!validator.allGroupsValid())
+
+    // Good: Custom validation logic
+    Button("Continue") {
+        proceedToNextStep()
+    }
+    .disabled(!validator.verifyGroup("currentStep"))
+
+- Error Handling...
+
+    private func submitForm() {
+        guard validator.allGroupsValid() else {
+            // Show error message
+            showValidationError()
+            return
+        }
+        
+        // Process valid form
+        processFormData()
+    }
+
 
 ## DeBugging TField Usage and User Extensions.
 - since Tfield is completely controlled by a set of state enums, it can be beneficial to see the value of those enums as a field progresses through its life.  To that end, a state message can be displayed above a particular field, or above all fields.
@@ -457,6 +801,8 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
 
 
 ## Version History
+- version 1.1.0
+    implement Group validation accessible to the parent view.  Added optional parameter group: String that allows you to specify a group for every field you want to monitor.  Then provide verifyGroup, and groupCount methods accessible to the parent view to indicate the validity of that group of fields.  See complete implementation notes above...
 
 - version 1.0.1
     added .city, .intcity (international city), .state, .st (Two letter state code) types

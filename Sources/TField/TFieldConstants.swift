@@ -105,3 +105,5 @@ let directionalVariations = [
 let oldStyleDirectional = [
     "N.C.", "N.D.", "S.C.", "S.D.", "W.V.", "W.VA."
 ]
+
+let timerRefreshInterval: Double = 0.5
