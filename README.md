@@ -2,7 +2,7 @@
 
 A SwiftUI package that implements an ENUM controlled TextField.  All of the internal operation is controlled by a state enum, and the external interface is controlled by a public extendable ENUM.  The user is able to select any of the preexisting types, or define their own.  Data validation is self contained in the field, and input filtering is used when applicable.
 
-## Tfield Features
+## TField Features
 
 - Simple calling function...  Tfield($text) will work with a default label of "Phrase", and no input filtering, or data validation
 - More options as needed... Tfield($text, required: true, type: .credit, label: "Enter Credit Card Number")
@@ -22,6 +22,7 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
   
 1. Import the package into your project  -  https://github.com/trigglemac/TField-SwiftUI.git
 2. import TField on any file that makes use of the feature
+3. I am working on this fairly regular at this point.  You can be assured that basic functionality and usage will not be impacted with versions up to 1.9.9.  I would suggest automatically updating to current minor releases (1.0.0 - 1.9.9) automatically as there are some validation errors, bugs, etc that are being rooted out.
 
 ## Tfield Usage
 1. There are several types available.  As of this version, those types include the following...
@@ -40,6 +41,10 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
     .phone - 10 digit formatted phone number
     .zip - five digit zip code
     .ssn - nine digit formatted social security number
+    .city - capitalizes and limits punctuation for US City
+    .intcity - capitalizes and limits punctuation for an international city (does not handle unicode)
+    .state - accepts any state, two letter, oldstyle abbreviation, or full name
+    .st - accepts only two letter capitalized state code
 
 2. the control can be called by the parent view in the following manner...
     Tfield($text) // where text is any state variable in your view.  text will be accepted as a @Binding var text: String.
@@ -66,228 +71,228 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
 - You can extend Tfield by adding an extension with additional types.  You should start by adding the following code...
 - Note that these three examples are now built in to the implementation, and are only provided as an example template to use...
 
-public enum MyCustomTypes: TBType {
-    case zipCode
-    case phoneNumber
-    case socialSecurity
-    
-    public var description: String {
-        switch self {
-        case .zipCode: return "ZIP Code"
-        case .phoneNumber: return "Phone Number"
-        case .socialSecurity: return "Social Security Number"
+    public enum MyCustomTypes: TBType {
+        case zipCode
+        case phoneNumber
+        case socialSecurity
+        
+        public var description: String {
+            switch self {
+            case .zipCode: return "ZIP Code"
+            case .phoneNumber: return "Phone Number"
+            case .socialSecurity: return "Social Security Number"
+            }
         }
+        
+        // ... implement other protocol requirements
     }
-    
-    // ... implement other protocol requirements
-}
 
 - This is the minimum implementation required...  The behavior will simply be a new type which can be specified, and an automatic label value associated with this type.  It will not have any additional features such as an input template, filtering, or validation and errorchecking.  If you want those associated with your type, then you need to implement them by adding the following public var statements to your 
 
 
 
-import SwiftUI
-import XCodeAdditions
+    import SwiftUI
+    import XCodeAdditions
 
-public enum MyCustomTypes: TBType {
-    
-    case zipCode
-    case phoneNumber
-    case socialSecurity
-    
-    public var description: String {
-        switch self {
-        case .zipCode: return "ZIP Code"
-        case .phoneNumber: return "Phone Number"
-        case .socialSecurity: return "SSN"
-        }
-    }
-    
-    public var template: String {
-        switch self {
-        case .zipCode: return "00000"
-        case .phoneNumber: return "(000) 000-0000"
-        case .socialSecurity: return "000-00-0000"
-        }
-    }
-    
-    // Platform-specific keyboard handling - software keyboard (ios)
-\#if canImport(UIKit)
-    public var keyboardType: UIKeyboardType {
-        switch self {
-        case .zipCode:
-            return .numberPad
-        case .phoneNumber:
-            return .phonePad
-        case .socialSecurity:
-            return .numberPad
-        }
-    }
-\#endif
-    
-    // How likely a field is to be condensed if space is needed.  1.0 is neutral.  Value between 0 and 10.0
-    public var fieldPriority: Double {
-        switch self {
-        case .zipCode:
-            return 0.6
-        case .phoneNumber:
-            return 0.9
-        case .socialSecurity:
-            return 0.8
-        }
-    }
-
-    // closure that will filter for expected characters and maximum characters, for instance numbers only, or exactly 5 digits.  Return the unformatted string (no formatting characters)    
-    public var filter: (String) -> String {
-        switch self {
-        case .zipCode:
-            return { text in
-                String(text.filter { $0.isNumber }.prefix(5))
-            }
-        case .phoneNumber:
-            return { text in
-                String(text.filter { $0.isNumber }.prefix(10))
-            }
-        case .socialSecurity:
-            return { text in
-                String(text.filter { $0.isNumber }.prefix(9))
+    public enum MyCustomTypes: TBType {
+            
+        case zipCode
+        case phoneNumber
+        case socialSecurity
+        
+        public var description: String {
+            switch self {
+            case .zipCode: return "ZIP Code"
+            case .phoneNumber: return "Phone Number"
+            case .socialSecurity: return "SSN"
             }
         }
-    }
-    
-    // Accepts a string - may not be complete string, that has been stripped of formatting, and adds in any formatting necessary.  Also responsible for capitalization or any other string modifications.  Only the portion of the data string that exists should be entered, so if you used an input filter of "(000) 000-0000", and three digits were entered, you should return "(123".  If a fourth digit is entered, you should return "(123) 4" (assuming data string was 123 or 1234).
-    public var reconstruct: (String) -> String {
-        switch self {
-        case .zipCode:
-            return { digitsOnly in
-                // no formatting here, just a 5 digit max numeric number
-                return "(\(digitsOnly.prefix(5))"
+        
+        public var template: String {
+            switch self {
+            case .zipCode: return "00000"
+            case .phoneNumber: return "(000) 000-0000"
+            case .socialSecurity: return "000-00-0000"
             }
-        case .phoneNumber:
-            return { digitsOnly in
-                // Implementation for (000) 000-0000 formatting
-                var formattedDigits = ""
-                switch digitsOnly.count {
-                case 0:
-                    formattedDigits = ""
-                case 1:
-                    formattedDigits = "(\(digitsOnly.prefix(1))"
-                case 2:
-                    formattedDigits = "(\(digitsOnly.prefix(2))"
-                case 3:
-                    formattedDigits = "(\(digitsOnly.prefix(3))"
-                case 4:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(1))"
-                case 5:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(2))"
-                case 6:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))"
-               case 7:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(1))"
-                case 8:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(2))"
-                case 9:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(3))"
-                case 10:
-                    formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(4))"
-                default:
-                    formattedDigits = ""  // This should never happen, because digitsonly is 0 - 10 characters
+        }
+        
+        // Platform-specific keyboard handling - software keyboard (ios)
+            #if canImport(UIKit)
+                public var keyboardType: UIKeyboardType {
+                    switch self {
+                    case .zipCode:
+                        return .numberPad
+                    case .phoneNumber:
+                        return .phonePad
+                    case .socialSecurity:
+                        return .numberPad
+                    }
                 }
-                return formattedDigits
+            #endif
+        
+        // How likely a field is to be condensed if space is needed.  1.0 is neutral.  Value between 0 and 10.0
+        public var fieldPriority: Double {
+            switch self {
+            case .zipCode:
+                return 0.6
+            case .phoneNumber:
+                return 0.9
+            case .socialSecurity:
+                return 0.8
             }
-        case .socialSecurity:
-            return { digitsOnly in
-                // Implementation for 000-00-0000 formatting
-                var formattedDigits: String = ""
-                switch digitsOnly.count {
-                case 0:
-                    formattedDigits = ""
-                case 1:
-                    formattedDigits = "\(digitsOnly.prefix(1))"
-                case 2:
-                    formattedDigits = "\(digitsOnly.prefix(2))"
-                case 3:
-                    formattedDigits = "\(digitsOnly.prefix(3))"
-                case 4:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(1))"
-                case 5:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))"
-                case 6:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(1))"
-                case 7:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(2))"
-                case 8:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(3))"
-                case 9:
-                    formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(4))"
-                default:
-                    formattedDigits = ""  // This should never happen, because digitsonly is 0 - 9 characters
+        }
+
+        // closure that will filter for expected characters and maximum characters, for instance numbers only, or exactly 5 digits.  Return the unformatted string (no formatting characters)    
+        public var filter: (String) -> String {
+            switch self {
+            case .zipCode:
+                return { text in
+                    String(text.filter { $0.isNumber }.prefix(5))
                 }
-                return formattedDigits
+            case .phoneNumber:
+                return { text in
+                    String(text.filter { $0.isNumber }.prefix(10))
+                }
+            case .socialSecurity:
+                return { text in
+                    String(text.filter { $0.isNumber }.prefix(9))
+                }
             }
         }
-    }
-
-    // implementation of character by character validation.  You know one or more characters have been added or deleted.  Text is a formatted string value.  You do not need to check for length or numbers only, as that is done with filtering.  What you might do here is for instance, verify that the first digit of "MM/YY" is a 0 or a 1.  If not, error out because there is no way to enter a valid number otherwise.
-    // if you return true, the value of errorMessage does not matter.  If you return false (invalid) then you must set your errorMessage to a string indicating the error description.
-    // Also note you do NOT get to alter the data value at all.  You flag the error only.
-    // You are hashing a formatted string (either empty, partial, or complete) so you may need to strip the formatting before you can actually validate the data.
-
-    public var validateLive: (_ text: String, _ errorMessage: inout String) -> Bool {
-        switch self {
-        // in these three cases, we do not need to do any live validation.  Any numeric digit is acceptable, and the input filter guarantees we only have at most the maximum number of numeric digits.
-        case .zipCode:
-            return { text, errorMessage in
-                return true
-            }
-        case .phoneNumber:
-            return { text, errorMessage in
-                return true
-            }
-        case .socialSecurity:
-            return { text, errorMessage in
-                return true
+        
+        // Accepts a string - may not be complete string, that has been stripped of formatting, and adds in any formatting necessary.  Also responsible for capitalization or any other string modifications.  Only the portion of the data string that exists should be entered, so if you used an input filter of "(000) 000-0000", and three digits were entered, you should return "(123".  If a fourth digit is entered, you should return "(123) 4" (assuming data string was 123 or 1234).
+        public var reconstruct: (String) -> String {
+            switch self {
+            case .zipCode:
+                return { digitsOnly in
+                    // no formatting here, just a 5 digit max numeric number
+                    return "(\(digitsOnly.prefix(5))"
+                }
+            case .phoneNumber:
+                return { digitsOnly in
+                    // Implementation for (000) 000-0000 formatting
+                    var formattedDigits = ""
+                    switch digitsOnly.count {
+                    case 0:
+                        formattedDigits = ""
+                    case 1:
+                        formattedDigits = "(\(digitsOnly.prefix(1))"
+                    case 2:
+                        formattedDigits = "(\(digitsOnly.prefix(2))"
+                    case 3:
+                        formattedDigits = "(\(digitsOnly.prefix(3))"
+                    case 4:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(1))"
+                    case 5:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(2))"
+                    case 6:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))"
+                   case 7:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(1))"
+                    case 8:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(2))"
+                    case 9:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(3))"
+                    case 10:
+                        formattedDigits = "(\(digitsOnly.prefix(3))) \(digitsOnly.dropFirst(3).prefix(3))-\(digitsOnly.dropFirst(6).prefix(4))"
+                    default:
+                        formattedDigits = ""  // This should never happen, because digitsonly is 0 - 10 characters
+                    }
+                    return formattedDigits
+                }
+            case .socialSecurity:
+                return { digitsOnly in
+                    // Implementation for 000-00-0000 formatting
+                    var formattedDigits: String = ""
+                    switch digitsOnly.count {
+                    case 0:
+                        formattedDigits = ""
+                    case 1:
+                        formattedDigits = "\(digitsOnly.prefix(1))"
+                    case 2:
+                        formattedDigits = "\(digitsOnly.prefix(2))"
+                    case 3:
+                        formattedDigits = "\(digitsOnly.prefix(3))"
+                    case 4:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(1))"
+                    case 5:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))"
+                    case 6:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(1))"
+                    case 7:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(2))"
+                    case 8:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(3))"
+                    case 9:
+                        formattedDigits = "\(digitsOnly.prefix(3))-\(digitsOnly.dropFirst(3).prefix(2))-\(digitsOnly.dropFirst(5).prefix(4))"
+                    default:
+                        formattedDigits = ""  // This should never happen, because digitsonly is 0 - 9 characters
+                    }
+                    return formattedDigits
+                }
             }
         }
-    }
-  
-    // code to verify result after the field looses focus - in otherwords, the final answer.
-    // You do not need to test for required status.  You may want to test that either your final value is valid, or that the value is a complete value.
-    // For instance, here you may want to verify that a complete data string was entered, not a partial.
 
-    public var validateResult: (_ text: String, _ errorMessage: inout String) -> Bool {
-        switch self {
-        case .zipCode:
-            return { text, errorMessage in
-                if text.count == 5 {
+        // implementation of character by character validation.  You know one or more characters have been added or deleted.  Text is a formatted string value.  You do not need to check for length or numbers only, as that is done with filtering.  What you might do here is for instance, verify that the first digit of "MM/YY" is a 0 or a 1.  If not, error out because there is no way to enter a valid number otherwise.
+        // if you return true, the value of errorMessage does not matter.  If you return false (invalid) then you must set your errorMessage to a string indicating the error description.
+        // Also note you do NOT get to alter the data value at all.  You flag the error only.
+        // You are hashing a formatted string (either empty, partial, or complete) so you may need to strip the formatting before you can actually validate the data.
+
+        public var validateLive: (_ text: String, _ errorMessage: inout String) -> Bool {
+            switch self {
+            // in these three cases, we do not need to do any live validation.  Any numeric digit is acceptable, and the input filter guarantees we only have at most the maximum number of numeric digits.
+            case .zipCode:
+                return { text, errorMessage in
                     return true
-                } else {
-                    errorMessage = "Incomplete Zip Code"
-                    return false
                 }
+            case .phoneNumber:
+                return { text, errorMessage in
+                    return true
+                }
+            case .socialSecurity:
+                return { text, errorMessage in
+                    return true
+                }
+            }
+        }
+      
+        // code to verify result after the field looses focus - in otherwords, the final answer.
+        // You do not need to test for required status.  You may want to test that either your final value is valid, or that the value is a complete value.
+        // For instance, here you may want to verify that a complete data string was entered, not a partial.
 
-            }
-        case .phoneNumber:
-            return { text, errorMessage in
-                if text.count == 14 {
-                    return true
-                } else {
-                    errorMessage = "Incomplete Phone #"
-                    return false
+        public var validateResult: (_ text: String, _ errorMessage: inout String) -> Bool {
+            switch self {
+            case .zipCode:
+                return { text, errorMessage in
+                    if text.count == 5 {
+                        return true
+                    } else {
+                        errorMessage = "Incomplete Zip Code"
+                        return false
+                    }
+
                 }
-            }
-        case .socialSecurity:
-            return { text, errorMessage in
-                if text.count == 11 {
-                    return true
-                } else {
-                    errorMessage = "Incomplete SSN"
-                    return false
+            case .phoneNumber:
+                return { text, errorMessage in
+                    if text.count == 14 {
+                        return true
+                    } else {
+                        errorMessage = "Incomplete Phone #"
+                        return false
+                    }
+                }
+            case .socialSecurity:
+                return { text, errorMessage in
+                    if text.count == 11 {
+                        return true
+                    } else {
+                        errorMessage = "Incomplete SSN"
+                        return false
+                    }
                 }
             }
         }
     }
-}
 
 
 
@@ -306,18 +311,122 @@ public enum MyCustomTypes: TBType {
 
 - Alternatively, if you do not want to specify the MyCustomTypes in your usage call, include the following convenience initializer in the same file as you define MyCustomTypes.  This will allow you to call your custom types with the same syntax as the built in ones... type: .phoneNumber for instance
 
-extension Tfield where T == MyCustomTypes {
-    public init(
-        _ text: Binding<String>, type: MyCustomTypes, required: Bool = false,
-        label: String = ""
-    ) {
-        self._text = text
-        self.type = type
-        self.required = required
-        self.label = label
-        _prompt = State(initialValue: type.template)
+    extension Tfield where T == MyCustomTypes {
+        public init(
+            _ text: Binding<String>, type: MyCustomTypes, required: Bool = false,
+            label: String = ""
+        ) {
+            self._text = text
+            self.type = type
+            self.required = required
+            self.label = label
+            _prompt = State(initialValue: type.template)
+        }
     }
-}
+
+
+## DeBugging TField Usage and User Extensions.
+- since Tfield is completely controlled by a set of state enums, it can be beneficial to see the value of those enums as a field progresses through its life.  To that end, a state message can be displayed above a particular field, or above all fields.
+- This debugging behavior is controlled by an environment variable @Environment(\.tFieldDebugEnabled)
+- This value will default to True in DEBUG builds, and false in release builds.
+- This value can be controlled by the package importer directly by using .tFieldDebug() 
+- To control this globally in your app, add the following...  
+ 
+        MyApp()
+            .tFieldDebug(false) // control Tfield debugging for the entire application.  
+            
+- You can also control this granularly at any level by adding the modifier after any instance of Tfield, or any group of instances
+- You can also debug your closures as they are being used by the package.  For instance if you create a validateLive closure for a custom TBType you have created  Otherwise, print statements place inside #DEBUG conditionals are may not be displayed because the closure is actually run in the TField package.
+- Usage Examples...
+
+    // Example 1: Default behavior (debug enabled in DEBUG builds, disabled in production builds)
+        struct DefaultDebugUsage: View {
+            @State private var name = ""
+            @State private var email = ""
+            
+            var body: some View {
+                VStack {
+                    Tfield($name, type: .name, required: true)
+                    Tfield($email, type: .phrase, required: true, label: "Email")
+                }
+                // Debug info automatically shown in DEBUG builds, hidden in production
+            }
+        }
+
+    // Example 2: Explicitly disable debug for entire form
+        struct NoDebugForm: View {
+            @State private var username = ""
+            @State private var password = ""
+            
+            var body: some View {
+                VStack {
+                    Tfield($username, type: .phrase, required: true)
+                    Tfield($password, type: .phrase, required: true)
+                }
+                .tFieldDebug(false) // Disable debug for all child TFields
+            }
+        }
+
+    // Example 3: Enable debug only for development section
+        struct MixedDebugUsage: View {
+            @State private var production1 = ""
+            @State private var production2 = ""
+            @State private var development1 = ""
+            @State private var development2 = ""
+            
+            var body: some View {
+                VStack {
+                    // Production section - no debug
+                    Section("Production") {
+                        Tfield($production1, type: .name, required: true)
+                        Tfield($production2, type: .phrase, required: true)
+                    }
+                    .tFieldDebug(false)
+                    
+                    // Development section - with debug
+                    Section("Development") {
+                        Tfield($development1, type: .phone, required: true)
+                        Tfield($development2, type: .zip, required: true)
+                    }
+                    .tFieldDebug(true)
+                }
+            }
+        }
+
+    // Example 4: Custom TBType with debug logging
+        public struct MyCustomTypes: TBType {
+            case email
+            
+            public var description: String { "Email Address" }
+            
+            public var validateResult: (String, inout String) -> Bool {
+                return { text, errorMessage in
+                    let isValid = text.contains("@") && text.contains(".")
+                    
+                    // Simple debug logging for custom types
+                    #if DEBUG
+                        print("CustomEmailType validation: '\(text)' -> \(isValid ? "valid" : "invalid")")
+                    #endif
+                    
+                    if !isValid {
+                        errorMessage = "Must be a valid email address"
+                    }
+                    return isValid
+                }
+            }
+        }
+
+        struct CustomTypeExample: View {
+            @State private var email = ""
+            
+            var body: some View {
+                Tfield($email, type: CustomEmailType(), required: true)
+                    .tFieldDebug(true) // Enable debug for custom type
+            }
+        }
+
+
+
 
 
 
@@ -329,21 +438,35 @@ extension Tfield where T == MyCustomTypes {
     badges would be updatable at any time, for instance, as soon as the first digit is entered in a credit, a badge indicating the type of card could be added to the label.  A password field may have a badge that updates as the password becomes more cryptic
 - expecting to add warning messages to supplement error messages.  Warning messages would be implemented in the validation routines.  An example might be warning that a credit is expired, or that that a password is too easy
 - potentially add some totally custom TextFields to the package, such as a joined pair of password verification or email verification fields, or perhaps a date field with an attached date picker.  All would share the same formatting as the original.
+- test suite for closure operations...
 - timeline: honestly this is a hobby.  And I am an infant when it comes to XCode and practical usage.  Getting it into a user package is probably next, then a few more types like address, street, apt, city, and zip.  Uncertain on timeline.  Concurrent to that is probably learning more about GitHub cause hey - ive never done this before.
+- possibly explore a conversion closure - for instance covert a state name to a two digit state abbreviation.  This would execute after validateResult is run.
 
 
 
 ## Known Issues...
 
-- Yeah, I dont know how to use GitHub.  I need to get versioning figured out next!
 - .credit tests the first digit when it is one digit long, but after a second digit is entered, the value is accepted regardless
-- .name has a validation error.  Space and hyphen are allowed, apostrophe is flagged as an error
-- Capitalization is broken now that reconstruct is handled automatically.  Need to decide if another variable closure is needed for formatting, or if this should be rolled into one of the existing closures (filter, validateLive, validateResult)
-- .age error messages are usually too long.  Just display the range.
 - label does not always fit on one line when field is condensed, even though there should be enough space (when two or more in an HStack)
+- .font(.title2) when applied there is vertical inconsistency between data and template.  Need to test other options as well and fix them.
+- should .data allow tab key?  not stripping it properly
+- how should phone number handle a 1 as the first digit.  perhaps not allow it, and add a "countrycode" for phone numbers also
+- validateResult not handling empty string in .age and .date correctly.  If not required, should be valid and state go back to idle.
+- several fields that strip whitespace not stripping tab keys.
+
 
 
 ## Version History
+
+- version 1.0.1
+    added .city, .intcity (international city), .state, .st (Two letter state code) types
+    fixed capitalization (handled it in filter) still need to allow apostrophe, and still need to capitalize first letter after apostrophe and first letter after dash
+    modified the debugging State message so end user can control rather it is displayed (no longer hard coded).  @Environment(\.tFieldDebugEnabled)  Usage is described in the debugging section of this document
+    adjusted vertical size slightly... accounts for state debugging message if debugging is on, otherwise vertical spacing is zero (all spacing is controlled by parent view)
+    fixed .date validation where day and month were not verified with live validation once a year was started to enter.
+    fixed .name where input filter handles capitalization... all words lowercased, then first letters and letters after apostrophe are capitalized.  Additionally leading spaces are trimmed.
+    added comprehensive test suite
+    
 - version 1.0.0
     posted correctly on GitHub...  version 1.0.0.  
 

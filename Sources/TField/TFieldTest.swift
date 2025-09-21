@@ -19,6 +19,11 @@ public struct TFieldExamples: View {
     @State private var test7 = ""
     @State private var test8 = ""
     @State private var test9 = ""
+    @State private var streetNumber: String = ""
+    @State private var streetName: String = ""
+    @State private var city: String = ""
+    @State private var state: String = ""
+    @State private var zip: String = ""
     
     public init() {}
     
@@ -32,7 +37,7 @@ public struct TFieldExamples: View {
                 .font(.title2)
             Tfield($test3)
                 .font(.title3)
-            Tfield($test4, type: .zip)
+            Tfield($test4, type: .date)
                 .font(.headline)
             Tfield($test5, type: .dataLength(length: 10), label: "Enter your 10 digit code")
                 .font(.subheadline)
@@ -40,10 +45,19 @@ public struct TFieldExamples: View {
                 .font(.caption)
             Tfield($test8, type: .age(min: 65, max: 120), label: "Enter your Age")
                 .font(.caption2)
-            HStack {
-                Tfield($test9, type: .streetnumber)
-                Tfield($test7, type: .street)
+
+            VStack {
+                HStack {
+                    Tfield($streetNumber, type: .streetnumber)
+                    Tfield($streetName, type: .street)
+                }
+                HStack {
+                    Tfield($city, type: .city)
+                    Tfield($state, type: .st)
+                    Tfield($zip, type: .zip)
+                }
             }
+            .padding()
         }
         .padding()
     }

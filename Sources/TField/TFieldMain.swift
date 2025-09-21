@@ -17,18 +17,18 @@ public struct Tfield<T: TBType>: View {
     @FocusState var isFocused: Bool
     @State private var contentPriority: Double = 1.0
     @State private var cachedMinWidth: CGFloat = 120
-    private let debugging: Bool = true
+    
+    @Environment(\.tFieldDebugEnabled) private var debugEnabled
     @Environment(\.font) private var environmentFont
     @Environment(\.sizeCategory) private var sizeCategory
-    @State private var cachedCapsuleHeight: CGFloat = TFieldConstants
-        .defaultCapsuleHeight
+    
+    // Cached values for performance
+    @State private var cachedCapsuleHeight: CGFloat = TFieldConstants.defaultCapsuleHeight
     @State private var cachedScaleFactor: CGFloat = 1.0
-    @State private var cachedAlignedFont: Font = .system(
-        .body, design: .monospaced)
-    @State private var cachedBaseCapsuleHeight: CGFloat = TFieldConstants
-        .defaultCapsuleHeight
+    @State private var cachedAlignedFont: Font = .system(.body, design: .monospaced)
+    @State private var cachedBaseCapsuleHeight: CGFloat = TFieldConstants.defaultCapsuleHeight
 
-    // For TType (built-in types) - allows .cvv, .name, etc.
+    // Init For TType (built-in types) - allows .cvv, .name, etc.
     public init(
         _ text: Binding<String>, type: TType = .phrase, required: Bool = false,
         label: String = ""
@@ -40,7 +40,7 @@ public struct Tfield<T: TBType>: View {
         _prompt = State(initialValue: type.template)
     }
 
-    // For any other TBType implementation - requires explicit typing
+    // Init For any other TBType implementation (external by user)- requires explicit typing
     public init(
         _ text: Binding<String>, type: T, required: Bool = false,
         label: String = ""
@@ -95,91 +95,47 @@ public struct Tfield<T: TBType>: View {
 
     }
     private func formatInputText() {  //this will handle any input filtering (like only numbers, or only 3 digits)
-        text = reconstruct(type.filter(text))
-
+        text = TFieldFormatting.reconstruct(type.filter(text), template: type.template, placeHolders: type.placeHolders)
     }
 
     //MARK: Update State Controller
     private func updateState() {
-        var errorMessage: String = ""
-        if isFocused {
-            formatInputText()
-            if type.validateLive(text, &errorMessage) {
-                inputState = .focused(.valid)
-            } else {
-                inputState = .focused(.invalid(errorMessage))
-            }
-        } else {
-            if text.isEmpty {
-                formatInputText()
-                if required {  // required and empty
-                    inputState = .inactive(.invalid("Required Entry"))
-                } else {  //optional and empty
-                    inputState = .idle
-                }
-            } else {
-
-                if type.validateResult(text, &errorMessage) {
-                    inputState = .inactive(.valid)
-                } else {
-                    inputState = .inactive(.invalid(errorMessage))
-                }
-            }
-        }
-    }
-
-    private func reconstruct(_ input: String) -> String {
-        // input is a data string stripped of any formatting, and guaranteed to be between 0 and max characters
-        // additionally, the characters are guaranteed to be of the specified type (for instance numbers for a zip code or phone number
-
-        let template = type.template
-        let placeHolders = type.placeHolders
-
-        // If no template, return input as-is
-        guard !template.isEmpty && !placeHolders.isEmpty else {
-            return input
-        }
-
-        // If no input, return empty string
-        guard !input.isEmpty else {
-            return ""
-        }
-
-        var result = ""
-        var inputIndex = 0
-        var pendingFormatting = ""
-
-        for char in template {
-            // Check if this character is any of the placeholder characters
-            let isPlaceholder = placeHolders.contains(char)
-
-            if isPlaceholder {
-                // This is a placeholder position
-                if inputIndex < input.count {
-                    // We have input data for this position
-                    // First add any pending formatting characters
-                    result.append(pendingFormatting)
-                    pendingFormatting = ""
-
-                    // Then add the input character
-                    let inputChar = input[
-                        input.index(input.startIndex, offsetBy: inputIndex)]
-                    result.append(inputChar)
-                    inputIndex += 1
-                } else {
-                    // No more input data, stop building result here
-                    break
-                }
-            } else {
-                // This is a formatting character
-                // Store it as pending until we have actual data to place
-                pendingFormatting.append(char)
-            }
-        }
-
-        return result
-    }
-
+          var errorMessage: String = ""
+          let previousState = inputState
+          
+          if isFocused {
+              formatInputText()
+              if type.validateLive(text, &errorMessage) { //focused and valid
+                  inputState = .focused(.valid)
+              } else {
+                  inputState = .focused(.invalid(errorMessage))  // focused and invalid
+              }
+          } else {
+              if text.isEmpty {
+                  formatInputText()
+                  if required {
+                      inputState = .inactive(.invalid("Required Entry")) // Loss of focus, required but empty
+                  } else {
+                      inputState = .idle  // Loss of focus, optional and empty
+                  }
+              } else {
+                  if type.validateResult(text, &errorMessage) {
+                      inputState = .inactive(.valid) // Loss of focus, valid
+                  } else {
+                      inputState = .inactive(.invalid(errorMessage))  // Loss of focus, invalid
+                  }
+              }
+          }
+          
+          // CHANGE: Simple conditional logging
+          #if DEBUG
+          if debugEnabled && inputState != previousState {
+              print("TField '\(getLabel())': \(previousState.description) → \(inputState.description)")
+          }
+          #endif
+      }
+    
+    
     //MARK: Update Layout Priority Controller
     private func updateLayoutPriority() {
         // Higher priority for fields with more content
@@ -210,6 +166,7 @@ public struct Tfield<T: TBType>: View {
         let minChars = max(10, text.count, prompt.count)
         cachedMinWidth = CGFloat(minChars) * 12
     }
+
 
 }
 
@@ -404,25 +361,25 @@ extension Tfield {
 extension Tfield {
     @ViewBuilder
     func makeStateMessage() -> some View {
-        Group {
-            if debugging {
-
-                Text(
-                    "\(String(describing: type)) / \(inputState.description) / P:\(String(format: "%.1f", contentPriority))"
-                ).foregroundStyle(inputState.debugDescriptionColor)
-                    .bold(required)
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.leading)
-                    .offset(y: debugOffset)
-                    .offset(x: -10)
-                    .allowsHitTesting(false)
-            } else {
-                EmptyView()
-            }
+        #if DEBUG
+        if debugEnabled {
+            Text(debugDescription)
+                .foregroundStyle(inputState.debugDescriptionColor)
+                .bold(required)
+                .font(.caption)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.leading)
+                .offset(y: debugOffset)
+                .offset(x: -10)
+                .allowsHitTesting(false)
         }
+        #endif
     }
-}  // makeStateMessage (if debugging)
+    
+    private var debugDescription: String {
+        "\(String(describing: type)) / \(inputState.description) / P:\(String(format: "%.1f", contentPriority))"
+    }
+}
 
 extension Tfield {
 
@@ -470,15 +427,22 @@ extension Tfield {
         }
 
     var mainFrameHeight: CGFloat {
-            var height: CGFloat = cachedCapsuleHeight
-            if hasError {
-                height += 0
-            }
-            if debugging {
-                height += 12 * cachedScaleFactor
-            }
-            return height
+        var height: CGFloat = cachedCapsuleHeight
+        
+        // Always account for error message space (core functionality)
+        if hasError {
+            height += 0  // Error messages use offset, not additional height
         }
+        
+        // Only add debug space when debugging is enabled
+        #if DEBUG
+        if debugEnabled {
+            height += 12 * cachedScaleFactor
+        }
+        #endif
+        
+        return height
+    }
 
     var hasError: Bool {  //Computed Boolean.  If an error is detected, this will be true
         switch inputState {

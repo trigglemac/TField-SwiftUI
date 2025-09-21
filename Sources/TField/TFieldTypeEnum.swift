@@ -8,7 +8,7 @@
 import SwiftUI
 
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 // This is the TType enum definition.  To Add a type, you must first add a case to this enum, then you must add an appropriate case statement to each of the extensions...
@@ -23,12 +23,16 @@ public enum TType: TBType, Equatable {
     case cvv  // 3 digit numeric number.  3 digits required
     case age(min: Int, max: Int)  //two digit age within the specified range
     case date  // mm/dd/yyyy
-    case streetnumber //Numbers only, no template, length <= 6, no formatting, cant be 0
-    case street // Capitalized, spaces and punctuation allowed.
-    case zip // 5 digit zip
-    case phone // 10 digit phone number
-    case ssn //9 digit social security number
-    
+    case streetnumber  //Numbers only, no template, length <= 6, no formatting, cant be 0
+    case street  // Capitalized, spaces and punctuation allowed.
+    case zip  // 5 digit zip
+    case phone  // 10 digit phone number
+    case ssn  //9 digit social security number
+    case city // US city name
+    case intcity
+    case state  // state name, any form allowed, but no live validation
+    case st // two letter capitalized state.
+
 }
 
 extension TType {
@@ -62,6 +66,14 @@ extension TType {
             return "Phone Number"
         case .ssn:
             return "Social Security #"
+        case .city:
+            return "City"
+        case .intcity:
+            return "City"
+        case .state:
+            return "State"
+        case .st:
+            return "State"
         }
     }
 }
@@ -97,6 +109,15 @@ extension TType {
             return "(000) 000-0000"
         case .ssn:
             return "000-00-0000"
+        case .city:
+            return ""
+        case .intcity:
+            return ""
+        case .state:
+            return ""
+        case .st:
+            return "XX"
+        
         }
     }
 }
@@ -132,6 +153,14 @@ extension TType {
             return "0"
         case .ssn:
             return "0"
+        case .city:
+            return ""
+        case .intcity:
+            return ""
+        case .state:
+            return ""
+        case .st:
+            return "X"
         }
     }
 }
@@ -146,54 +175,64 @@ extension TType {
         case .credit: return 1.5
         case .expDate: return 0.5
         case .cvv: return 0.5
-        case .age(_,_): return 0.5
+        case .age(_, _): return 0.5
         case .date: return 1.0
         case .streetnumber: return 0.6
         case .street: return 1.5
         case .zip: return 0.6
         case .phone: return 0.7
         case .ssn: return 0.7
-            
-            
+        case .city: return 2.5
+        case .intcity: return 1.5
+        case .state: return 1.0
+        case .st: return 0.2
         }
     }
 }
 
 #if canImport(UIKit)
-extension TType {
-    public var keyboardType: UIKeyboardType {
-        switch self {
-        case .data:
-            return .default
-        case .dataLength(length: _):
-            return .default
-        case .name:
-            return .default
-        case .phrase:
-            return .default
-        case .credit:
-            return .numberPad
-        case .expDate:
-            return .numberPad
-        case .cvv:
-            return .numberPad
-        case .age(min: _, max: _):
-            return .numberPad
-        case .date:
-            return .numberPad
-        case .streetnumber:
-            return .numberPad
-        case .street:
-            return .default
-        case .phone:
-            return .numberPad
-        case .zip:
-            return .numberPad
-        case .ssn:
-            return .numberPad
+    extension TType {
+        public var keyboardType: UIKeyboardType {
+            switch self {
+            case .data:
+                return .default
+            case .dataLength(length: _):
+                return .default
+            case .name:
+                return .default
+            case .phrase:
+                return .default
+            case .credit:
+                return .numberPad
+            case .expDate:
+                return .numberPad
+            case .cvv:
+                return .numberPad
+            case .age(min: _, max: _):
+                return .numberPad
+            case .date:
+                return .numberPad
+            case .streetnumber:
+                return .numberPad
+            case .street:
+                return .default
+            case .phone:
+                return .numberPad
+            case .zip:
+                return .numberPad
+            case .ssn:
+                return .numberPad
+            case .city:
+                return .default
+            case .intcity:
+                return .default
+            case .state:
+                return .default
+            case .st:
+                return .default
+            }
         }
     }
-}
 #endif
 
 extension TType {  // This will handle any data verification as numbers are being entered
@@ -224,16 +263,7 @@ extension TType {  // This will handle any data verification as numbers are bein
             }
         case .name:
             return { text, errorMessage in
-                // Check for invalid characters (numbers, special chars except spaces, hyphens, apostrophes)
-                let allowedCharacterSet = CharacterSet.letters.union(
-                    CharacterSet(charactersIn: ". '-"))
-                if text.rangeOfCharacter(from: allowedCharacterSet.inverted)
-                    != nil
-                {
-                    errorMessage =
-                        "Only letters, spaces, hyphens, and apostrophes"
-                    return false
-                }
+                // Input Filtering handles all live validation, and also handles capitalization in real time.
                 return true
             }
         case .phrase:
@@ -453,17 +483,20 @@ extension TType {  // This will handle any data verification as numbers are bein
                     }
 
                     // Handle false case with proper error messages
-                    if max < twoDigitValue {
-                        // max is less than the 2-digit digits value (e.g., "90" but max is 80)
+                    if twoDigitValue < min {
+                        // Direct 2-digit value is too small
+                        errorMessage = "Age must be at least \(min)"
+                    } else if twoDigitValue > max {
+                        // Direct 2-digit value is too large
                         errorMessage = "Age cannot exceed \(max)"
                     } else if min > threeDigitEnd {
-                        // min is higher than the highest 3-digit value from digits (e.g., min 250, digits "23" → max 239)
+                        // min is higher than the highest 3-digit value from digits
                         errorMessage = "Age must be at least \(min)"
                     } else if max < threeDigitStart {
                         // max falls between the 2-digit value and possible 3-digit expansions
                         errorMessage = "Age cannot exceed \(max)"
                     } else {
-                        // Fallback case (rare)
+                        // Fallback case
                         errorMessage = "LOGIC ERROR VALIDATE LIVE"
                     }
                     return false
@@ -532,7 +565,7 @@ extension TType {  // This will handle any data verification as numbers are bein
                         } else {  //month valid, test day
                             if let day = Int(digitsOnly.dropFirst(2).prefix(2))
                             {
-                                if day > 0 && day < 30 {
+                                if day > 0 && day < 32 {
                                     return true
                                 } else {
                                     errorMessage = "Invalid Day"
@@ -548,7 +581,28 @@ extension TType {  // This will handle any data verification as numbers are bein
                         return false
                     }
                 case 5...8:  // accept any 4 digit year
-                    return true
+                    if let month = Int(digitsOnly.prefix(2)) {
+                        if month < 1 || month > 12 {
+                            errorMessage = "Invalid Month"
+                            return false
+                        } else {  //month valid, test day
+                            if let day = Int(digitsOnly.dropFirst(2).prefix(2))
+                            {
+                                if day < 1 || day > 31 {
+                                    errorMessage = "Invalid Day"
+                                    return false
+                                } else {  //month and day valid, accept any year
+                                    return true
+                                }
+                            } else {
+                                errorMessage = "INVALID DATE"  // This should not be possible
+                                return false
+                            }
+                        }
+                    } else {
+                        errorMessage = "INVALID DATE"  // This should not be possible
+                        return false
+                    }
                 default:
                     return false  // this should not be possible with input filtering
                 }
@@ -572,6 +626,54 @@ extension TType {  // This will handle any data verification as numbers are bein
         case .ssn:
             return { text, errorMessage in
                 return true
+            }
+        case .city:
+            return { text, errorMessage in
+                // input filtering and capitalization handled in filter
+                return true
+            }
+        case .intcity:
+                // international city filtering and capitalization handled in filter
+            return { text, errorMessage in
+                return true
+            }
+        case .state:
+            return { text, errorMessage in
+                return true
+            }
+        case .st:
+            return { text, errorMessage in
+                // Empty text is valid
+                if text.isEmpty {
+                    return true
+                }
+                
+                // Two character text - check if it's a valid state code
+                if text.count == 2 {
+                    if validStateCodes.contains(text.uppercased()) {
+                        return true
+                    } else {
+                        errorMessage = "Invalid State"
+                        return false
+                    }
+                }
+                
+                // One character text - check if any valid state codes start with this letter
+                if text.count == 1 {
+                    let firstLetter = text.uppercased()
+                    let hasValidStart = validStateCodes.contains { $0.hasPrefix(firstLetter) }
+                    
+                    if hasValidStart {
+                        return true
+                    } else {
+                        errorMessage = "Invalid State"
+                        return false
+                    }
+                }
+                
+                // Should not reach here given the assumption, but handle gracefully
+                errorMessage = "Invalid State"
+                return false
             }
         }
     }
@@ -624,7 +726,7 @@ extension TType {  // This will handle any data verification as numbers are bein
                         let min = String(thisYear - 12).dropFirst(2).prefix(2)
                         let max = String(thisYear + 12).dropFirst(2).prefix(2)
                         if let minInt = Int(min), let maxInt = Int(max),
-                           let yearInt = Int(digitsOnly.dropFirst(2).prefix(2))
+                            let yearInt = Int(digitsOnly.dropFirst(2).prefix(2))
                         {
                             if yearInt < minInt || yearInt > maxInt {
                                 errorMessage = "Year out of range"
@@ -637,12 +739,12 @@ extension TType {  // This will handle any data verification as numbers are bein
                             return false
                         }
                     }
-                    
+
                 } else {
                     errorMessage = "Invalid Month/Year #"  // This should not be possible
                     return false
                 }
-                
+
             }
         case .cvv:  // input filter handles numeric input.  Final number acceptable if 3 digits
             return { text, errorMessage in
@@ -657,25 +759,25 @@ extension TType {  // This will handle any data verification as numbers are bein
                 }
                 switch value {
                 case ..<min:
-                    errorMessage = "Value is smaller than /(min)"
+                    errorMessage = "Value is smaller than \(min)"
                     return false
                 case (max + 1)...:
-                    errorMessage = "Value is larger than /(max)"
+                    errorMessage = "Value is larger than \(max)"
                     return false
                 default: return true
                 }
-                
+
             }
         case .date:
             return { text, errorMessage in
                 let dateFormatter = DateFormatter()
-                
+
                 // Set the date format to match the input string
                 dateFormatter.dateFormat = "MM/dd/yyyy"
-                
+
                 // Ensure the formatter uses the correct locale and timezone
                 dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-                
+
                 // Attempt to convert the string to a Date object
                 if let date = dateFormatter.date(from: text) {
                     // If the conversion is successful, check if the original string matches
@@ -705,7 +807,7 @@ extension TType {  // This will handle any data verification as numbers are bein
             }
         case .zip:
             return { text, errorMessage in
-                 if text.count == 5 {
+                if text.count == 5 {
                     return true
                 } else {
                     errorMessage = "Incomplete Zip Code"
@@ -730,6 +832,86 @@ extension TType {  // This will handle any data verification as numbers are bein
                     return false
                 }
             }
+        case .city:
+            return { text, errorMessage in
+                // could add a service here to test valid city name.
+                return true
+            }
+        case .intcity:
+            return { text, errorMessage in
+                return true
+            }
+        case .state:
+            return { text, errorMessage in
+                // Clean the input - remove extra spaces and normalize
+                let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                
+                // Reject if too short
+                if cleanText.count < 2 {
+                    errorMessage = "Invalid State Name"
+                    return false
+                }
+                
+                // Test 1: Two-letter postal codes (states + territories)
+                if cleanText.count == 2 && cleanText.allSatisfy({ $0.isLetter }) {
+
+                    if validStateCodes.contains(cleanText.uppercased()) {
+                        return true
+                    } else {
+                        errorMessage = "Invalid State Name"
+                        return false
+                    }
+                }
+                
+                // Test 2: Old-style abbreviations (with or without periods)
+                let withoutPeriods = cleanText.replacingOccurrences(of: ".", with: "")
+                if withoutPeriods.count <= 5 {
+                    if oldStyleAbbreviations.contains(withoutPeriods.uppercased()) {
+                        return true
+                    }
+                }
+                
+                // Test 3: Full state and territory names
+                if fullStateNames.contains(cleanText.uppercased()) {
+                    return true
+                }
+                
+                // Test 4: Directional abbreviations (N., S., E., W.)
+                let upperText = cleanText.uppercased()
+                for (abbreviated, _) in directionalVariations {
+                    if upperText == abbreviated {
+                        return true
+                    }
+                }
+                
+                // Test 5: Old-style directional abbreviations
+                if oldStyleDirectional.contains(cleanText.uppercased()) {
+                    return true
+                }
+                
+                // If none of the tests pass
+                errorMessage = "Invalid State Name"
+                return false
+            }
+        case .st:
+            return { text, errorMessage in
+                // Empty text is valid
+                if text.isEmpty {
+                    return true
+                }
+                
+                // Check if it's a valid two-letter state code
+                if validStateCodes.contains(text.uppercased()) {
+                    return true
+                }
+                
+                // Invalid state code
+                errorMessage = "Invalid State"
+                return false
+            }
+            
+        
         }
     }
 }
@@ -767,11 +949,33 @@ extension TType {
             return { text in
                 String(
                     text.replacingOccurrences(
-                        of: "\\s+", with: "", options: .regularExpression).prefix(length))
+                        of: "\\s+", with: "", options: .regularExpression
+                    ).prefix(length))
             }  // same as .data, but specified length
         case .name:
             return { text in
-                text.capitalized                
+                // Trim leading spaces only
+                let trimmedText = text.drop(while: { $0 == " " })
+                
+                // Filter to only allowed characters
+                let allowedCharacters = CharacterSet.letters.union(
+                    CharacterSet(charactersIn: "'-. ")
+                )
+                let filteredText = String(trimmedText).filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                // Use built-in capitalized, then fix apostrophe cases
+                var result = filteredText.lowercased().capitalized
+                
+                // Handle capitalization after apostrophes
+                if result.contains("'") {
+                    let parts = result.components(separatedBy: "'")
+                    let capitalizedParts = parts.map { $0.capitalized }
+                    result = capitalizedParts.joined(separator: "'")
+                }
+                
+                return result
             }  // Multiple words, Proper Capitalization
         case .phrase:
             return { text in
@@ -824,6 +1028,79 @@ extension TType {
         case .ssn:
             return { text in
                 String(text.filter { $0.isNumber }.prefix(9))
+            }
+        case .city:
+            return { text in
+                // Trim leading spaces only
+                let trimmedText = text.drop(while: { $0 == " " })
+                
+                // Filter to only allowed characters for US cities
+                // Cities can have: letters, spaces, hyphens, periods (for abbreviations like St.)
+                let allowedCharacters = CharacterSet.letters.union(
+                    CharacterSet(charactersIn: "-. ")
+                )
+                let filteredText = String(trimmedText).filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                // Use built-in capitalized for proper city name formatting
+                let result = filteredText.lowercased().capitalized
+                
+                return result
+            }
+        case .intcity:
+            return { text in
+                // Trim leading spaces only
+                let trimmedText = text.drop(while: { $0 == " " })
+                
+                // Filter to allowed characters for international cities
+                let allowedCharacters = CharacterSet.letters.union(
+                    CharacterSet(charactersIn: "-. '/()&")
+                )
+                let filteredText = String(trimmedText).filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                // Use built-in capitalized for proper city name formatting
+                let result = filteredText.lowercased().capitalized
+                
+                return result
+            }
+        case .state:
+            return { text in
+                // Trim leading spaces only
+                let trimmedText = text.drop(while: { $0 == " " })
+                
+                // Filter to allowed characters for US states
+                let allowedCharacters = CharacterSet.letters.union(
+                    CharacterSet(charactersIn: ". ")
+                )
+                let filteredText = String(trimmedText).filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                // Check if it's exactly 2 letters (potential state code)
+                if filteredText.count == 2 && filteredText.allSatisfy({ $0.isLetter }) {
+                    // Valid state codes - capitalize both letters
+                    let upperCaseText = filteredText.uppercased()
+                    if validStateCodes.contains(upperCaseText) {
+                        return upperCaseText
+                    }
+                }
+                
+                // For all other cases, use normal capitalization
+                let result = filteredText.lowercased().capitalized
+                return result
+            }
+        case .st:
+            return { text in
+                // Filter to only alphabetic characters
+                let lettersOnly = text.filter { $0.isLetter }
+                
+                // Take at most 2 characters and capitalize them
+                let limitedText = String(lettersOnly.prefix(2))
+                
+                return limitedText.uppercased()
             }
         }
     }
