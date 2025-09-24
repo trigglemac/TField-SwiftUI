@@ -797,6 +797,7 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
 - how should phone number handle a 1 as the first digit.  perhaps not allow it, and add a "countrycode" for phone numbers also
 - validateResult not handling empty string in .age and .date correctly.  If not required, should be valid and state go back to idle.
 - several fields that strip whitespace not stripping tab keys.
+- .date - should test for valid complete date even when still have focus, if date is complete.  Not just on loss of focus.
 
 
 

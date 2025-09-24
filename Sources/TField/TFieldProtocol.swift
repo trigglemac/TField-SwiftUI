@@ -11,7 +11,8 @@ import SwiftUI
     import UIKit
 #endif
 
-public protocol TBType {
+// MARK: - TFType Protocol Definition
+public protocol TFType {
     
     
     // Required by protocol.  This is the default string that will be used if none provided by the calling view
@@ -46,11 +47,8 @@ public protocol TBType {
 
 }
 
-
-
-
-// Default implementations provided for convenience...
-extension TBType {
+// MARK: - Default Protocol implementations provided for convenience...
+extension TFType {
 
     public var template: String { "" }
     public var placeHolders: String { "" }
@@ -65,4 +63,33 @@ extension TBType {
     public var keyboardType: UIKeyboardType { .default }
     #endif
 
+}
+
+// MARK: - Template Validation Extension
+extension TFType {
+    /// Validate the template configuration for this field type
+    /// Returns a tuple with validation result and optional error message
+    public var templateValidation: (isValid: Bool, error: String?) {
+        return TFieldTemplates.validateTemplateConfiguration(self)
+    }
+    
+    /// Check if this field type has a template
+    public var hasTemplate: Bool {
+        return TFieldTemplates.hasTemplate(self)
+    }
+    
+    /// Check if this field type has placeholders
+    public var hasPlaceholders: Bool {
+        return TFieldTemplates.hasPlaceholders(self)
+    }
+    
+    /// Get the expected final length of formatted text for this template
+    public var templateLength: Int {
+        return TFieldTemplates.getTemplateLength(self)
+    }
+    
+    /// Get the maximum number of data characters that can fit in this template
+    public var maxDataLength: Int {
+        return TFieldTemplates.getMaxDataLength(self)
+    }
 }

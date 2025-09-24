@@ -13,7 +13,7 @@ import SwiftUI
 
 // This is the TType enum definition.  To Add a type, you must first add a case to this enum, then you must add an appropriate case statement to each of the extensions...
 
-public enum TType: TBType, Equatable {
+public enum TType: TFType, Equatable {
     case data  //Current Default!  single alphanumeric string, no spaces allowed
     case dataLength(length: Int)  // single alphanumeric string, specified length
     case name  //name  Alpha string any length, allowed spaces, capitalized, limited punctuation (period, space, dash, apostrophe)

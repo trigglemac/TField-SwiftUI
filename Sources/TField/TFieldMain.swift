@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-public struct Tfield<T: TBType>: View {
+public struct Tfield<T: TFType>: View {
     @Binding var text: String
     var label: String
     var required: Bool
@@ -18,7 +18,6 @@ public struct Tfield<T: TBType>: View {
     @State private var prompt: String
     @FocusState var isFocused: Bool
     @State private var contentPriority: Double = 1.0
-    @State private var cachedMinWidth: CGFloat = 120
 
     @Environment(\.tFieldDebugEnabled) private var debugEnabled
     @Environment(\.font) private var environmentFont
@@ -26,13 +25,7 @@ public struct Tfield<T: TBType>: View {
     @Environment(\.tFieldGroupManager) private var groupManager
 
     // Cached values for performance
-    @State private var cachedCapsuleHeight: CGFloat = TFieldConstants
-        .defaultCapsuleHeight
-    @State private var cachedScaleFactor: CGFloat = 1.0
-    @State private var cachedAlignedFont: Font = .system(
-        .body, design: .monospaced)
-    @State private var cachedBaseCapsuleHeight: CGFloat = TFieldConstants
-        .defaultCapsuleHeight
+    @State private var cache = TFieldCoreUtilities.FieldCache()
 
     // Init For TType (built-in types) - allows .cvv, .name, etc.
     public init(
@@ -50,7 +43,7 @@ public struct Tfield<T: TBType>: View {
         _prompt = State(initialValue: type.template)
     }
 
-    // Init For any other TBType implementation (external by user)- requires explicit typing
+    // Init For any other TFType implementation (external by user)- requires explicit typing
     public init(
         _ text: Binding<String>,
         type: T,
@@ -112,124 +105,94 @@ public struct Tfield<T: TBType>: View {
                 let isValid: Bool
 
                 if text.isEmpty {
-                    isValid = !required  // Empty is only valid if not required
+                    isValid = !required
                 } else {
-                    isValid = type.validateResult(text, &errorMessage)  // Use final validation
+                    isValid = type.validateResult(text, &errorMessage)
                 }
 
-                manager.updateField(
-                    group: group, fieldId: fieldId, isValid: isValid)
+                TFieldCoreUtilities.updateGroupManager(
+                    groupManager: manager,
+                    group: group,
+                    fieldId: fieldId,
+                    isValid: isValid
+                )
             }
         }
         .onDisappear {
             // Unregister from group manager
-            if let group = group, let manager = groupManager {
-                manager.removeField(group: group, fieldId: fieldId)
-            }
+            TFieldCoreUtilities.cleanupGroupManager(
+                groupManager: groupManager,
+                group: group,
+                fieldId: fieldId
+            )
         }
     }
-    private func formatInputText() {  //this will handle any input filtering (like only numbers, or only 3 digits)
-        text = TFieldFormatting.reconstruct(
-            type.filter(text), template: type.template,
-            placeHolders: type.placeHolders)
+    private func formatInputText() {
+        text = TFieldTemplates.reconstruct(
+            type.filter(text),
+            template: type.template,
+            placeHolders: type.placeHolders
+        )
     }
 
     //MARK: Update State Controller
     private func updateState() {
-        var errorMessage: String = ""
+        
         let previousState = inputState
 
         if isFocused {
             formatInputText()
-            if type.validateLive(text, &errorMessage) {  //focused and valid
-                inputState = .focused(.valid)
-            } else {
-                inputState = .focused(.invalid(errorMessage))  // focused and invalid
-            }
-        } else {
-            if text.isEmpty {
-                formatInputText()
-                if required {
-                    inputState = .inactive(.invalid("Required Entry"))  // Loss of focus, required but empty
-                } else {
-                    inputState = .idle  // Loss of focus, optional and empty
-                }
-            } else {
-                if type.validateResult(text, &errorMessage) {
-                    inputState = .inactive(.valid)  // Loss of focus, valid
-                } else {
-                    inputState = .inactive(.invalid(errorMessage))  // Loss of focus, invalid
-                }
-            }
         }
+        if text.isEmpty && !isFocused {
+            formatInputText()
+        }
+
+        inputState = TFieldCoreUtilities.calculateInputState(
+            isFocused: isFocused,
+            text: text,
+            fieldType: type,
+            required: required
+        )
 
         // Update group manager if field belongs to a group and manager is available
-        if let group = group, let manager = groupManager {
-            manager.updateField(
-                group: group, fieldId: fieldId, isValid: submissionValid)
-        }
+        TFieldCoreUtilities.updateGroupManager(
+            groupManager: groupManager,
+            group: group,
+            fieldId: fieldId,
+            isValid: submissionValid
+        )
 
         // CHANGE: Simple conditional logging
-        #if DEBUG
-            if debugEnabled && inputState != previousState {
-                print(
-                    "TField '\(getLabel())': \(previousState.description) → \(inputState.description)"
-                )
-            }
-        #endif
+        TFieldCoreUtilities.logStateChange(
+            fieldType: type,
+            label: getLabel(),
+            from: previousState,
+            to: inputState,
+            enabled: debugEnabled
+        )
     }
     private var submissionValid: Bool {
-        switch inputState {
-        case .idle:
-            return !required  // Idle: valid only if optional
-        case .inactive(.valid):
-            return true
-        case .focused(.valid):
-            // For focused valid state, we need to check:
-            // 1. If required and empty, it's not submission valid
-            // 2. If not empty, check if the input is actually complete using validateResult
-            if required && text.isEmpty {
-                return false
-            }
-            var errorMessage = ""
-            return type.validateResult(text, &errorMessage)
-        case .focused(.invalid), .inactive(.invalid):
-            return false
-        case .focused(.empty), .inactive(.empty):
-            return !required  // Empty after interaction: valid only if optional
-        }
+        return TFieldCoreUtilities.isSubmissionValid(
+            inputState: inputState,
+            text: text,
+            fieldType: type,
+            required: required
+        )
     }
 
     //MARK: Update Layout Priority Controller
     private func updateLayoutPriority() {
-        // Higher priority for fields with more content
-        let textLength = text.count
-        let promptLength = prompt.count
-        let totalContent = max(textLength, promptLength)
-
-        // Base priority on content length and type
-        contentPriority = 1.0 + (Double(totalContent) * 0.1)
-
-        // Boost priority for fields that are actively being edited
-        if isFocused {
-            contentPriority += 0.5
-        }
-
-        // Special handling for different field types
-
-        if type.fieldPriority < 1.0 {
-            // cap the priority for smaller content at 1.2
-            contentPriority = min(contentPriority, 1.2)
-        } else {
-            // priority floor for larger content is 1.3
-            contentPriority = max(contentPriority, 1.3)
-        }
-
+        contentPriority = TFieldCoreUtilities.calculateLayoutPriority(
+            text: text,
+            template: prompt,
+            fieldType: type,
+            isFocused: isFocused
+        )
     }
     private func updateMinWidth() {
-        let minChars = max(10, text.count, prompt.count)
-        cachedMinWidth = CGFloat(minChars) * 12
+        cache.updateWidthIfNeeded(textCount: text.count, templateCount: prompt.count)
     }
+
 
 }
 
@@ -276,65 +239,19 @@ extension Tfield {
                 .padding(.horizontal)
         }
         .frame(height: capsuleHeight)
-        .frame(minWidth: cachedMinWidth, maxWidth: .infinity)
+        .frame(minWidth: cache.minWidth, maxWidth: .infinity)
     }
 
     // State-responsive gradient:
     var stateGradient: LinearGradient {
-        let baseOpacity: Double = isFocused ? 0.08 : 0.04
-
-        switch inputState.validity {
-        case .valid:
-            return LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.blue.opacity(baseOpacity * 3.0),
-                    Color.blue.opacity(baseOpacity),
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .invalid:
-            return LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.red.opacity(baseOpacity * 5.0),
-                    Color.red.opacity(baseOpacity),
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        default:
-            return LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.blue.opacity(baseOpacity * 1.0),
-                    Color.blue.opacity(baseOpacity),
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
+        return TFieldUtils.calculateStateGradient(validity: inputState.validity, isFocused: isFocused)
     }
-
+    
     private func createColoredTemplate() -> Text {
-        let template = type.template
-        let textLength = text.count
-
-        guard !template.isEmpty else {
-            return Text("")
-        }
-
-        var result = Text("")
-
-        for (index, char) in template.enumerated() {
-            if index < textLength {
-                // This position is covered by the formatted text - make it clear
-                result = result + Text(String(char)).foregroundColor(.clear)
-            } else {
-                // This position is not covered - show in gray
-                result = result + Text(String(char)).foregroundColor(.gray)
-            }
-        }
-
-        return result
+        return TFieldTemplates.createColoredTemplate(
+            fieldType: type,
+            currentTextLength: text.count
+        )
     }
 }
 
@@ -367,30 +284,19 @@ extension Tfield {
 
     //Dynamic label background
     var labelBackground: Color {
-        if isLabelFloating {
-            #if canImport(UIKit)
-                return Color(UIColor.systemBackground)
-            #else
-                return Color(NSColor.windowBackgroundColor)
-            #endif
-        } else {
-            return Color.clear
-        }
-
+        return TFieldUtils.getLabelBackground(isFloating: isLabelFloating)
     }
+    
     var isLabelFloating: Bool {
-        if case .idle = inputState, text.isEmpty && prompt.isEmpty {
-            return false
-        }
-        return true
+        return TFieldPositioning.isLabelFloating(
+            inputState: inputState,
+            text: text,
+            prompt: prompt
+        )
     }
 
     private func getLabel() -> String {
-        if label.isEmpty {
-            return type.description
-        } else {
-            return label
-        }
+        return TFieldUtils.getDisplayLabel(customLabel: label, fieldType: type)
     }
 }  // floatingLabel
 
@@ -414,14 +320,9 @@ extension Tfield {
         }
     }
     var errorBackground: Color {
-
-        #if canImport(UIKit)
-            return Color(UIColor.systemBackground)
-        #else
-            return Color(NSColor.windowBackgroundColor)
-        #endif
-
+        return TFieldUtils.getErrorBackground()
     }
+
 }  // makeErrorMessage
 
 extension Tfield {
@@ -443,227 +344,100 @@ extension Tfield {
     }
 
     private var debugDescription: String {
-        "\(String(describing: type)) / \(inputState.description) / P:\(String(format: "%.1f", contentPriority))"
+        TFieldCoreUtilities.debugDescription(
+            fieldType: type,
+            inputState: inputState,
+            contentPriority: contentPriority
+        )
     }
 }
 
 extension Tfield {
 
     var labelOffset: CGFloat {
-        switch inputState {
-        case .idle where text.isEmpty && prompt.isEmpty:
-            return 0
-        default:
-            return -(cachedCapsuleHeight * TFieldConstants.labelOffsetRatio)
-        }
+        return TFieldPositioning.calculateLabelOffset(
+            inputState: inputState,
+            text: text,
+            prompt: prompt,
+            capsuleHeight: cache.capsuleHeight
+        )
     }
 
     var labelScale: CGFloat {
-        switch inputState {
-        case .idle where text.isEmpty && prompt.isEmpty: return 1
-        default:
-            return 0.85
-        }
+        return TFieldPositioning.calculateLabelScale(
+            inputState: inputState,
+            text: text,
+            prompt: prompt
+        )
     }
 
     var errorOffset: CGFloat {
-        switch inputState {
-        case .idle where text.isEmpty:
-            return 0
-        default:
-            return cachedCapsuleHeight * TFieldConstants.errorOffsetRatio
-        }
+        return TFieldPositioning.calculateErrorOffset(
+            inputState: inputState,
+            text: text,
+            capsuleHeight: cache.capsuleHeight
+        )
     }
 
+
     var debugOffset: CGFloat {
-        switch inputState {
-        case .idle where text.isEmpty && prompt.isEmpty:
-            return 0
-        case .inactive(.valid) where text.isEmpty && prompt.isEmpty:
-            return 0
-        case .inactive(.invalid) where text.isEmpty && prompt.isEmpty:
-            return 0
-        default:
-            return -(cachedCapsuleHeight * TFieldConstants.debugOffsetRatio)
-        }
+        return TFieldPositioning.calculateDebugOffset(
+            inputState: inputState,
+            text: text,
+            prompt: prompt,
+            capsuleHeight: cache.capsuleHeight
+        )
     }
 
     var requiredIndicatorOffset: CGFloat {
-        return -(cachedCapsuleHeight * TFieldConstants.requiredOffsetRatio)
+        return TFieldPositioning.calculateRequiredIndicatorOffset(
+            capsuleHeight: cache.capsuleHeight
+        )
     }
+
 
     var mainFrameHeight: CGFloat {
-        var height: CGFloat = cachedCapsuleHeight
-
-        // Always account for error message space (core functionality)
-        if hasError {
-            height += 0  // Error messages use offset, not additional height
-        }
-
-        // Only add debug space when debugging is enabled
-        #if DEBUG
-            if debugEnabled {
-                height += 12 * cachedScaleFactor
-            }
-        #endif
-
-        return height
+        return TFieldPositioning.calculateMainFrameHeight(
+            capsuleHeight: cache.capsuleHeight,
+            scaleFactor: cache.scaleFactor,
+            hasError: hasError,
+            debugEnabled: debugEnabled
+        )
     }
 
-    var hasError: Bool {  //Computed Boolean.  If an error is detected, this will be true
-        switch inputState {
-        case .focused(.invalid): return true
-        case .inactive(.invalid): return true
-        default: return false
-        }
+    var hasError: Bool {
+        return TFieldPositioning.hasError(inputState: inputState)
     }
 
     var templateXOffset: CGFloat {
-        var offset = 0
-        #if canImport(UIKit)
-            offset = 1
-        #else
-            offset = 1
-        #endif
-        return CGFloat(offset)
+        return TFieldPositioning.calculateTemplateXOffset(
+            inputState: inputState
+        )
     }
 
     var templateYOffset: CGFloat {
-        var offset = 0
-        #if canImport(UIKit)
-            switch inputState {
-            case .focused(.invalid), .inactive(.invalid):
-                offset = 1
-            default:
-                offset = 0
-            }
-        #else
-            switch inputState {
-            case .focused(.invalid), .inactive(.invalid):
-                offset = 0
-            default:
-                offset = 0
-            }
-
-        #endif
-        return CGFloat(offset)
+        return TFieldPositioning.calculateTemplateYOffset(
+            inputState: inputState
+        )
     }
 
     var alignedFont: Font {
-        // Always use monospaced design for perfect character alignment
-        // Scale the size based on environment font if available
-        return cachedAlignedFont
+        return cache.alignedFont
     }
+    
     private func updateCachedValues() {
-        cachedScaleFactor = calculateDynamicTypeScaleFactor()
-        cachedBaseCapsuleHeight = calculateBaseCapsuleHeight()
-        cachedCapsuleHeight = cachedBaseCapsuleHeight * cachedScaleFactor
-        cachedAlignedFont = calculateAlignedFont()
-    }
-
-    private func calculateDynamicTypeScaleFactor() -> CGFloat {
-        switch sizeCategory {
-        case .extraSmall:
-            return TFieldConstants.DynamicTypeScales.extraSmall
-        case .small:
-            return TFieldConstants.DynamicTypeScales.small
-        case .medium:
-            return TFieldConstants.DynamicTypeScales.medium
-        case .large:
-            return TFieldConstants.DynamicTypeScales.large
-        case .extraLarge:
-            return TFieldConstants.DynamicTypeScales.extraLarge
-        case .extraExtraLarge:
-            return TFieldConstants.DynamicTypeScales.extraExtraLarge
-        case .extraExtraExtraLarge:
-            return TFieldConstants.DynamicTypeScales.extraExtraExtraLarge
-        case .accessibilityMedium:
-            return TFieldConstants.DynamicTypeScales.accessibilityMedium
-        case .accessibilityLarge:
-            return TFieldConstants.DynamicTypeScales.accessibilityLarge
-        case .accessibilityExtraLarge:
-            return TFieldConstants.DynamicTypeScales.accessibilityExtraLarge
-        case .accessibilityExtraExtraLarge:
-            return TFieldConstants.DynamicTypeScales
-                .accessibilityExtraExtraLarge
-        case .accessibilityExtraExtraExtraLarge:
-            return TFieldConstants.DynamicTypeScales
-                .accessibilityExtraExtraExtraLarge
-        @unknown default:
-            return TFieldConstants.DynamicTypeScales.medium
-        }
-    }
-
-    private func calculateBaseCapsuleHeight() -> CGFloat {
-        if let envFont = environmentFont {
-            switch envFont {
-            case .largeTitle:
-                return TFieldConstants.FontHeights.largeTitle
-            case .title:
-                return TFieldConstants.FontHeights.title
-            case .title2:
-                return TFieldConstants.FontHeights.title2
-            case .title3:
-                return TFieldConstants.FontHeights.title3
-            case .headline:
-                return TFieldConstants.FontHeights.headline
-            case .subheadline:
-                return TFieldConstants.FontHeights.subheadline
-            case .body:
-                return TFieldConstants.FontHeights.body
-            case .callout:
-                return TFieldConstants.FontHeights.callout
-            case .footnote:
-                return TFieldConstants.FontHeights.footnote
-            case .caption:
-                return TFieldConstants.FontHeights.caption
-            case .caption2:
-                return TFieldConstants.FontHeights.caption2
-            default:
-                return TFieldConstants.defaultCapsuleHeight
-            }
-        } else {
-            return TFieldConstants.defaultCapsuleHeight
-        }
-    }
-
-    private func calculateAlignedFont() -> Font {
-        if let envFont = environmentFont {
-            switch envFont {
-            case .largeTitle:
-                return .system(.largeTitle, design: .monospaced)
-            case .title:
-                return .system(.title, design: .monospaced)
-            case .title2:
-                return .system(.title2, design: .monospaced)
-            case .title3:
-                return .system(.title3, design: .monospaced)
-            case .headline:
-                return .system(.headline, design: .monospaced)
-            case .subheadline:
-                return .system(.subheadline, design: .monospaced)
-            case .callout:
-                return .system(.callout, design: .monospaced)
-            case .footnote:
-                return .system(.footnote, design: .monospaced)
-            case .caption:
-                return .system(.caption, design: .monospaced)
-            case .caption2:
-                return .system(.caption2, design: .monospaced)
-            default:
-                return .system(.body, design: .monospaced)
-            }
-        } else {
-            return .system(.body, design: .monospaced)
-        }
+        cache.updateFontValues(
+            environmentFont: environmentFont,
+            sizeCategory: sizeCategory
+        )
     }
 
     var capsuleHeight: CGFloat {
-        // Get the base height from font style
-        return cachedCapsuleHeight
+        return cache.capsuleHeight
     }
     var dynamicTypeScaleFactor: CGFloat {
-        return cachedScaleFactor
+        return cache.scaleFactor
     }
+
 
 }  // offset calculations for floating elements
