@@ -599,12 +599,12 @@ A SwiftUI package that implements an ENUM controlled TextField.  All of the inte
 
 - Status Displays in real time...
 
-    VStack {
-        Text("Personal: \(validator.verifyGroup("personal") ? "✅ Valid" : "❌ Invalid")")
-        Text("Address: \(validator.verifyGroup("address") ? "✅ Valid" : "❌ Invalid")")
-        Text("Payment: \(validator.verifyGroup("payment") ? "✅ Valid" : "❌ Invalid")")
-        Text("Ready to submit: \(validator.allGroupsValid() ? "✅" : "❌")")
-    }
+        VStack {
+            Text("Personal: \(validator.verifyGroup("personal") ? "✅ Valid" : "❌ Invalid")")
+            Text("Address: \(validator.verifyGroup("address") ? "✅ Valid" : "❌ Invalid")")
+            Text("Payment: \(validator.verifyGroup("payment") ? "✅ Valid" : "❌ Invalid")")
+            Text("Ready to submit: \(validator.allGroupsValid() ? "✅" : "❌")")
+        }
 
 - Group Names: Case sensitive...  Personal ≠ personal
 - Choose descriptive, consistent names

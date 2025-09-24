@@ -25,7 +25,7 @@ public struct Tfield<T: TFType>: View {
     @Environment(\.tFieldGroupManager) private var groupManager
 
     // Cached values for performance
-    @State private var cache = TFieldCoreUtilities.FieldCache()
+    @State private var cache = TFieldCache()
 
     // Init For TType (built-in types) - allows .cvv, .name, etc.
     public init(
@@ -99,28 +99,25 @@ public struct Tfield<T: TFType>: View {
             updateLayoutPriority()
             updateMinWidth()
 
-            // Register with group manager if part of a group and manager is available
-            if let group = group, let manager = groupManager {
+            // Register with group manager - utility handles nil values
+            let isValid: Bool
+            if text.isEmpty {
+                isValid = !required
+            } else {
                 var errorMessage = ""
-                let isValid: Bool
-
-                if text.isEmpty {
-                    isValid = !required
-                } else {
-                    isValid = type.validateResult(text, &errorMessage)
-                }
-
-                TFieldCoreUtilities.updateGroupManager(
-                    groupManager: manager,
-                    group: group,
-                    fieldId: fieldId,
-                    isValid: isValid
-                )
+                isValid = type.validateResult(text, &errorMessage)
             }
+
+            TFieldCore.updateGroupManager(
+                groupManager: groupManager,
+                group: group,
+                fieldId: fieldId,
+                isValid: isValid
+            )
         }
         .onDisappear {
             // Unregister from group manager
-            TFieldCoreUtilities.cleanupGroupManager(
+            TFieldCore.cleanupGroupManager(
                 groupManager: groupManager,
                 group: group,
                 fieldId: fieldId
@@ -147,7 +144,7 @@ public struct Tfield<T: TFType>: View {
             formatInputText()
         }
 
-        inputState = TFieldCoreUtilities.calculateInputState(
+        inputState = TFieldCore.calculateInputState(
             isFocused: isFocused,
             text: text,
             fieldType: type,
@@ -155,7 +152,7 @@ public struct Tfield<T: TFType>: View {
         )
 
         // Update group manager if field belongs to a group and manager is available
-        TFieldCoreUtilities.updateGroupManager(
+        TFieldCore.updateGroupManager(
             groupManager: groupManager,
             group: group,
             fieldId: fieldId,
@@ -163,7 +160,7 @@ public struct Tfield<T: TFType>: View {
         )
 
         // CHANGE: Simple conditional logging
-        TFieldCoreUtilities.logStateChange(
+        TFieldCore.logStateChange(
             fieldType: type,
             label: getLabel(),
             from: previousState,
@@ -172,7 +169,7 @@ public struct Tfield<T: TFType>: View {
         )
     }
     private var submissionValid: Bool {
-        return TFieldCoreUtilities.isSubmissionValid(
+        return TFieldCore.isSubmissionValid(
             inputState: inputState,
             text: text,
             fieldType: type,
@@ -182,7 +179,7 @@ public struct Tfield<T: TFType>: View {
 
     //MARK: Update Layout Priority Controller
     private func updateLayoutPriority() {
-        contentPriority = TFieldCoreUtilities.calculateLayoutPriority(
+        contentPriority = TFieldCore.calculateLayoutPriority(
             text: text,
             template: prompt,
             fieldType: type,
@@ -344,7 +341,7 @@ extension Tfield {
     }
 
     private var debugDescription: String {
-        TFieldCoreUtilities.debugDescription(
+        TFieldCore.debugDescription(
             fieldType: type,
             inputState: inputState,
             contentPriority: contentPriority

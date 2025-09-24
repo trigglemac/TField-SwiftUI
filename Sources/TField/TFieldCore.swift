@@ -1,5 +1,5 @@
 //
-//  TFieldCoreUtilities.swift
+//  TFieldCore.swift
 //  TField
 //
 //  Created by utility extraction for TField/TBox shared logic
@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: - Core Utilities for TField and TBox Components
 
-struct TFieldCoreUtilities {
+struct TFieldCore {
     
     // MARK: - State Management
     
@@ -156,55 +156,6 @@ struct TFieldCoreUtilities {
     ) -> CGFloat {
         let minChars = max(10, textCount, templateCount)
         return CGFloat(minChars) * 12
-    }
-    
-    // MARK: - Cached Value Management
-    
-    /// Consolidated cache structure for field calculations
-    struct FieldCache {
-        var capsuleHeight: CGFloat
-        var scaleFactor: CGFloat
-        var alignedFont: Font
-        var baseCapsuleHeight: CGFloat
-        var minWidth: CGFloat
-        var lastTextLength: Int
-        
-        init() {
-            self.capsuleHeight = TFieldConstants.defaultCapsuleHeight
-            self.scaleFactor = 1.0
-            self.alignedFont = .system(.body, design: .monospaced)
-            self.baseCapsuleHeight = TFieldConstants.defaultCapsuleHeight
-            self.minWidth = 120
-            self.lastTextLength = 0
-        }
-        
-        /// Update all font-related values at once for efficiency
-        mutating func updateFontValues(
-            environmentFont: Font?,
-            sizeCategory: ContentSizeCategory
-        ) {
-            let config = TFieldFonts.calculateFontConfiguration(
-                environmentFont: environmentFont,
-                sizeCategory: sizeCategory
-            )
-            
-            self.alignedFont = config.alignedFont
-            self.baseCapsuleHeight = config.baseCapsuleHeight
-            self.scaleFactor = config.scaleFactor
-            self.capsuleHeight = config.scaledCapsuleHeight
-        }
-        
-        /// Update width cache only when text length changes significantly
-        mutating func updateWidthIfNeeded(textCount: Int, templateCount: Int) {
-            let currentLength = max(textCount, templateCount)
-            if abs(currentLength - lastTextLength) > 2 { // Only recalculate for significant changes
-                self.minWidth = TFieldCoreUtilities.calculateMinWidth(
-                    textCount: textCount,
-                    templateCount: templateCount
-                )
-                self.lastTextLength = currentLength
-            }
-        }
     }
     
     // MARK: - Debug Utilities
