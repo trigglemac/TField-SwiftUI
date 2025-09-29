@@ -17,7 +17,11 @@ public struct Tfield<T: TFType>: View {
     @State var inputState: InputState = .idle
     @State private var prompt: String
     @FocusState var isFocused: Bool
+    @State private var previousFocusState: Bool = false
+    @State private var isFinalized: Bool = false
     @State private var contentPriority: Double = 1.0
+    
+    @State private var lastExpansionState: Bool? = nil
 
     @Environment(\.tFieldDebugEnabled) private var debugEnabled
     @Environment(\.font) private var environmentFont
@@ -79,6 +83,8 @@ public struct Tfield<T: TFType>: View {
             updateLayoutPriority()
         }
         .onChange(of: text) { old, newInput in
+            lastExpansionState = TFieldCore.determineExpansionState(oldText: old, newText: newInput)
+                
             updateState()
             updateLayoutPriority()
             updateMinWidth()
@@ -125,25 +131,86 @@ public struct Tfield<T: TFType>: View {
         }
     }
     private func formatInputText() {
+        // Don't process finalized text to avoid corrupting trailing formatting
+        guard !isFinalized else {
+            return
+        }
+        
+        // Step 1: Check for dynamic template and update if needed
+        let newTemplate = TFieldCore.applyDynamicTemplate(
+            fieldType: type,
+            rawInput: text,
+            currentTemplate: prompt
+        )
+        
+        // Update prompt if template changed
+        if newTemplate != prompt {
+            prompt = newTemplate
+        }
+        
+        // Step 2: Apply filter and reconstruct as usual
+        // Note: We don't have access to old text here, so pass nil
         text = TFieldTemplates.reconstruct(
-            type.filter(text),
-            template: type.template,
+            type.filter(text, lastExpansionState),
+            template: prompt,
             placeHolders: type.placeHolders
         )
     }
 
     //MARK: Update State Controller
     private func updateState() {
-        
         let previousState = inputState
-
-        if isFocused {
-            formatInputText()
+        
+        // Create focus state objects for enum-based transition handling
+        let previousFocusState = TFieldFocusState(isFocused: self.previousFocusState)
+        let currentFocusState = TFieldFocusState(isFocused: isFocused)
+        
+        // Handle focus transitions using the new enum-based system
+        let transitionResult = TFieldCore.handleFocusTransition(
+            previousFocusState: previousFocusState,
+            currentFocusState: currentFocusState,
+            text: &text,
+            isFinalized: &isFinalized,
+            fieldType: type,
+            prompt: &prompt
+        )
+        
+        // Update focus state tracking
+        self.previousFocusState = isFocused
+        
+        // Handle transition results
+        switch transitionResult {
+        case .validationFailed(let error):
+            inputState = .inactive(.invalid(error))
+            // Update group manager
+            TFieldCore.updateGroupManager(
+                groupManager: groupManager,
+                group: group,
+                fieldId: fieldId,
+                isValid: submissionValid
+            )
+            // Log the state change
+            TFieldCore.logStateChange(
+                fieldType: type,
+                label: getLabel(),
+                from: previousState,
+                to: inputState,
+                enabled: debugEnabled
+            )
+            return
+            
+        case .gainingFocus, .losingFocus:
+            // For focus transitions, the handleFocusTransition already handled text processing
+            break
+            
+        case .keepsFocus, .staysInactive:
+            // For non-transition cases, apply normal formatting if not finalized
+            if !isFinalized {
+                formatInputText()
+            }
         }
-        if text.isEmpty && !isFocused {
-            formatInputText()
-        }
-
+        
+        // Calculate new input state
         inputState = TFieldCore.calculateInputState(
             isFocused: isFocused,
             text: text,
@@ -159,7 +226,7 @@ public struct Tfield<T: TFType>: View {
             isValid: submissionValid
         )
 
-        // CHANGE: Simple conditional logging
+        // Log state changes
         TFieldCore.logStateChange(
             fieldType: type,
             label: getLabel(),
@@ -246,7 +313,7 @@ extension Tfield {
     
     private func createColoredTemplate() -> Text {
         return TFieldTemplates.createColoredTemplate(
-            fieldType: type,
+            customTemplate: prompt,  // Use dynamic prompt instead of static type.template
             currentTextLength: text.count
         )
     }
@@ -438,3 +505,6 @@ extension Tfield {
 
 
 }  // offset calculations for floating elements
+
+
+

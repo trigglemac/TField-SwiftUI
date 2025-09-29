@@ -42,6 +42,77 @@ struct TFieldTemplates {
         return result
     }
     
+    /// Create colored template text using a custom template string (for dynamic templates)
+    static func createColoredTemplate(
+        customTemplate: String,
+        currentTextLength: Int,
+        filledColor: Color = .clear,
+        unfilledColor: Color = .gray
+    ) -> Text {
+        guard !customTemplate.isEmpty else {
+            return Text("")
+        }
+
+        var result = Text("")
+
+        for (index, char) in customTemplate.enumerated() {
+            if index < currentTextLength {
+                // This position is covered by the formatted text - make it the filled color
+                result = result + Text(String(char)).foregroundColor(filledColor)
+            } else {
+                // This position is not covered - show in unfilled color
+                result = result + Text(String(char)).foregroundColor(unfilledColor)
+            }
+        }
+
+        return result
+    }
+    
+    /// Finalize formatted text when field loses focus - adds trailing formatting
+    /// This ensures the final stored value includes all formatting for display
+    static func finalReconstruct(
+        _ input: String,
+        template: String,
+        placeHolders: String
+    ) -> String {
+        // If no template, return input as-is
+        guard !template.isEmpty && !placeHolders.isEmpty else {
+            return input
+        }
+
+        // If no input, return empty string
+        guard !input.isEmpty else {
+            return ""
+        }
+
+        var result = ""
+        var inputIndex = 0
+
+        for char in template {
+            // Check if this character is any of the placeholder characters
+            let isPlaceholder = placeHolders.contains(char)
+
+            if isPlaceholder {
+                // This is a placeholder position
+                if inputIndex < input.count {
+                    // We have input data for this position
+                    let inputChar = input[
+                        input.index(input.startIndex, offsetBy: inputIndex)]
+                    result.append(inputChar)
+                    inputIndex += 1
+                } else {
+                    // No more input data, stop building result here
+                    break
+                }
+            } else {
+                // This is a formatting character - always include it
+                result.append(char)
+            }
+        }
+
+        return result
+    }
+    
     // MARK: - Template Analysis
     
     /// Check if a field type has a template

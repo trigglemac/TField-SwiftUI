@@ -12,6 +12,17 @@ import SwiftUI
 // They are private to the view, and should not be modified or manhandled outside of the TField code itself
 // More specifically, they are set initially, and then are modified by the updataState routine.
 
+// Focus state tracking for transitions
+enum TFieldFocusState: Equatable {
+    case focused
+    case inactive
+    
+    /// Initialize based on current focus state
+    init(isFocused: Bool) {
+        self = isFocused ? .focused : .inactive
+    }
+}
+
 // Textfield state definition...
 enum InputState: Equatable, CustomStringConvertible {
     case idle  //Textfield is either idle - initial state, waiting for interaction
@@ -78,4 +89,29 @@ extension InputState {
             }
         }
     }
+}
+
+// Focus state transition utilities
+extension TFieldFocusState {
+    /// Determine what kind of focus transition occurred
+    static func analyzeTransition(from previous: TFieldFocusState, to current: TFieldFocusState) -> FocusTransition {
+        switch (previous, current) {
+        case (.inactive, .focused):
+            return .gainingFocus
+        case (.focused, .inactive):
+            return .losingFocus
+        case (.focused, .focused):
+            return .keepsFocus
+        case (.inactive, .inactive):
+            return .staysInactive
+        }
+    }
+}
+
+// Focus transition result types
+enum FocusTransition {
+    case gainingFocus
+    case losingFocus
+    case keepsFocus     // Was focused, stays focused
+    case staysInactive  // Was inactive, stays inactive
 }

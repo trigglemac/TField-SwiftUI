@@ -32,6 +32,8 @@ public enum TType: TFType, Equatable {
     case intcity
     case state  // state name, any form allowed, but no live validation
     case st // two letter capitalized state.
+    case currency // US Currency
+    case percent // Percentage value
 
 }
 
@@ -74,6 +76,10 @@ extension TType {
             return "State"
         case .st:
             return "State"
+        case .currency:
+            return "US Currency"
+        case .percent:
+            return "Percentage"
         }
     }
 }
@@ -117,6 +123,10 @@ extension TType {
             return ""
         case .st:
             return "XX"
+        case .currency:
+            return "$0.00"
+        case .percent:
+            return "0.00%"
         
         }
     }
@@ -161,6 +171,10 @@ extension TType {
             return ""
         case .st:
             return "X"
+        case .currency:
+            return "0."
+        case .percent:
+            return "0."
         }
     }
 }
@@ -186,6 +200,8 @@ extension TType {
         case .intcity: return 1.5
         case .state: return 1.0
         case .st: return 0.2
+        case .currency: return 0.5
+        case .percent: return 0.5
         }
     }
 }
@@ -230,6 +246,10 @@ extension TType {
                 return .default
             case .st:
                 return .default
+            case .currency:
+                return .decimalPad
+            case .percent:
+                return .decimalPad
             }
         }
     }
@@ -675,11 +695,19 @@ extension TType {  // This will handle any data verification as numbers are bein
                 errorMessage = "Invalid State"
                 return false
             }
+        case .currency:
+            return { text, errorMessage in
+                return true
+            }
+        case .percent:
+            return { text, errorMessage in
+                return true
+            }
         }
     }
 }
 
-extension TType {  // This will handle any data verification as numbers are being entered
+extension TType {  // This will handle any data verification as numbers being entered
     public var validateResult:
         (_ text: String, _ errorMessage: inout String) -> Bool
     {
@@ -910,7 +938,14 @@ extension TType {  // This will handle any data verification as numbers are bein
                 errorMessage = "Invalid State"
                 return false
             }
-            
+        case .currency:
+            return { text, errorMessage in
+                return true
+            }
+        case .percent:
+            return { text, errorMessage in
+                return true
+            }
         
         }
     }
@@ -938,22 +973,22 @@ extension TType {
 }
 
 extension TType {
-    public var filter: (String) -> String {
+    public var filter: (String, Bool?) -> String {
         switch self {
         case .data:
-            return { text in
+            return { text, _ in
                 text.replacingOccurrences(
                     of: "\\s+", with: "", options: .regularExpression)
             }  // no spaces, single character string
         case .dataLength(let length):
-            return { text in
+            return { text, _ in
                 String(
                     text.replacingOccurrences(
                         of: "\\s+", with: "", options: .regularExpression
                     ).prefix(length))
             }  // same as .data, but specified length
         case .name:
-            return { text in
+            return { text, _ in
                 // Trim leading spaces only
                 let trimmedText = text.drop(while: { $0 == " " })
                 
@@ -978,59 +1013,107 @@ extension TType {
                 return result
             }  // Multiple words, Proper Capitalization
         case .phrase:
-            return { text in
+            return { text, _ in
                 text
             }  //No filter or format at all
         case .credit:
-            return { text in
+            return { text, _ in
                 let inputText = text.filter { $0.isNumber || $0 == " " }
                 let digitsOnly = inputText.replacingOccurrences(
                     of: " ", with: "")
                 return String(digitsOnly.prefix(16))
             }  // 16 digit numeric
         case .expDate:
-            return { text in
+            return { text, isExpansion in
                 let digitsOnly = text.filter { $0.isNumber }
-                return String(digitsOnly.prefix(4))
+                var filtered = String(digitsOnly.prefix(4))
+                
+                if filtered.count == 1 {
+                    let firstDigit = Int(String(filtered.first!))!
+                    
+                    // NEW: Handle deletion case
+                    if firstDigit == 0 && isExpansion == false {
+                        // User deleted text and left only "0" - clear it
+                        return ""
+                    } else if firstDigit >= 2 && firstDigit <= 9 {
+                        // Auto-prepend zero for months 02-09
+                        filtered = "0" + filtered
+                    }
+                    // For 0 or 1, leave as-is and wait for second digit
+                }
+                
+                return filtered
+
             }  // 4 numeric digits
         case .cvv:
-            return { text in
+            return { text, _ in
                 let digitsOnly = String(text.filter { $0.isNumber })
                 return String(digitsOnly.prefix(3))
             }  // 3 numeric digits
         case .age(_, let max):
-            return { text in
+            return { text, _ in
                 let maxLength = max >= 100 ? 3 : 2
                 return String(text.filter { $0.isNumber }.prefix(maxLength))
             }  //two or three digits depending on max > 99
         case .date:
-            return { text in
+            return { text, isExpansion in
                 let digitsOnly = text.filter { $0.isNumber }
-                return String(digitsOnly.prefix(8))
+                var filtered = String(digitsOnly.prefix(8))
+                
+                // Handle month auto-correction (first 1-2 digits)
+                if filtered.count == 1 {
+                    let firstDigit = Int(String(filtered.first!))!
+                    
+                    // Handle deletion case for month
+                    if firstDigit == 0 && isExpansion == false {
+                        return ""
+                    } else if firstDigit >= 2 && firstDigit <= 9 {
+                        // Auto-prepend zero for months 02-09
+                        filtered = "0" + filtered
+                    }
+                    // For 0 or 1, wait for second digit
+                }
+                
+                // Handle day auto-correction (positions 3-4 in MM/DD/YYYY)
+                else if filtered.count == 3 {
+                    let monthPart = String(filtered.prefix(2))
+                    let dayFirstDigit = Int(String(filtered.suffix(1)))!
+                    
+                    // Handle deletion case for day
+                    if dayFirstDigit == 0 && isExpansion == false {
+                        return monthPart // Remove the lone zero, keep month
+                    } else if dayFirstDigit >= 4 && dayFirstDigit <= 9 {
+                        // Auto-prepend zero for days 04-09
+                        filtered = monthPart + "0" + String(dayFirstDigit)
+                    }
+                    // For day digits 1-3, wait for second digit
+                }
+                
+                return filtered
             }
         case .streetnumber:
-            return { text in
+            return { text, _ in
                 let digitsOnly = text.filter { $0.isNumber }
                 return String(digitsOnly.prefix(6))
             }
         case .street:
-            return { text in
+            return { text, _ in
                 text.capitalized
             }
         case .zip:
-            return { text in
+            return { text, _ in
                 String(text.filter { $0.isNumber }.prefix(5))
             }
         case .phone:
-            return { text in
+            return { text, _ in
                 String(text.filter { $0.isNumber }.prefix(10))
             }
         case .ssn:
-            return { text in
+            return { text, _ in
                 String(text.filter { $0.isNumber }.prefix(9))
             }
         case .city:
-            return { text in
+            return { text, _ in
                 // Trim leading spaces only
                 let trimmedText = text.drop(while: { $0 == " " })
                 
@@ -1049,7 +1132,7 @@ extension TType {
                 return result
             }
         case .intcity:
-            return { text in
+            return { text, _ in
                 // Trim leading spaces only
                 let trimmedText = text.drop(while: { $0 == " " })
                 
@@ -1067,7 +1150,7 @@ extension TType {
                 return result
             }
         case .state:
-            return { text in
+            return { text, _ in
                 // Trim leading spaces only
                 let trimmedText = text.drop(while: { $0 == " " })
                 
@@ -1093,7 +1176,7 @@ extension TType {
                 return result
             }
         case .st:
-            return { text in
+            return { text, _ in
                 // Filter to only alphabetic characters
                 let lettersOnly = text.filter { $0.isLetter }
                 
@@ -1102,6 +1185,29 @@ extension TType {
                 
                 return limitedText.uppercased()
             }
+        case .currency:
+            return { text, _ in
+                let allowedCharacters = CharacterSet.decimalDigits.union(
+                    CharacterSet(charactersIn: ".")
+                )
+                let filteredText = text.filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                return filteredText
+            }
+        case .percent:
+            return { text, _ in
+                let allowedCharacters = CharacterSet.decimalDigits.union(
+                    CharacterSet(charactersIn: ".")
+                )
+                let filteredText = text.filter { char in
+                    String(char).rangeOfCharacter(from: allowedCharacters) != nil
+                }
+                
+                return filteredText
+            }
         }
     }
 }  // .filter - responsible for input filtering and max length filtering.  returns an UNFORMATTED string
+

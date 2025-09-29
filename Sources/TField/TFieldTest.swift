@@ -5,7 +5,6 @@
 //  Created by Timothy Riggle on 9/12/25.
 //
 
-
 import SwiftUI
 
 @available(iOS 17.0, macOS 15.0, *)
@@ -24,42 +23,65 @@ public struct TFieldExamples: View {
     @State private var city: String = ""
     @State private var state: String = ""
     @State private var zip: String = ""
-    
+
     public init() {}
-    
-    
+
     public var body: some View {
         VStack(spacing: 0) {
-            Tfield($test1, type: .phone)
-                .font(.title)
+            Button("Test Console") {
+                print("🧪 CONSOLE TEST - This should appear in console")
+            }
+            .padding()
 
-            Tfield($test2, type: .expDate, required: true, label: "Exp Date")
+            // ... rest of your fields
+            VStack(spacing: 0) {
+                Tfield($test1, type: .phone)
+                    .font(.title)
+
+                Tfield(
+                    $test2,
+                    type: .expDate,
+                    required: true,
+                    label: "Exp Date"
+                )
                 .font(.title2)
-            Tfield($test3)
-                .font(.title3)
-            Tfield($test4, type: .date)
-                .font(.headline)
-            Tfield($test5, type: .dataLength(length: 10), label: "Enter your 10 digit code")
+
+                Tfield($test3, type: .currency)
+                    .font(.title3)
+                    .environment(\.tFieldDebugEnabled, true)
+
+                Tfield($test4, type: .date)
+                    .font(.headline)
+                Tfield(
+                    $test5,
+                    type: .percent,
+                    label: "Percentage"
+                )
                 .font(.subheadline)
-            Tfield($test6, type: .ssn)  // Same as default
-                .font(.caption)
-            Tfield($test8, type: .age(min: 65, max: 120), label: "Enter your Age")
+                Tfield($test6, type: .ssn)  // Same as default
+                    .font(.caption)
+                Tfield(
+                    $test8,
+                    type: .age(min: 65, max: 120),
+                    label: "Enter your Age"
+                )
                 .font(.caption2)
 
-            VStack {
-                HStack {
-                    Tfield($streetNumber, type: .streetnumber)
-                    Tfield($streetName, type: .street)
+                VStack {
+                    HStack {
+                        Tfield($streetNumber, type: .streetnumber)
+                        Tfield($streetName, type: .street)
+                    }
+                    HStack {
+                        Tfield($city, type: .city)
+                        Tfield($state, type: .st)
+                        Tfield($zip, type: .zip)
+                    }
                 }
-                HStack {
-                    Tfield($city, type: .city)
-                    Tfield($state, type: .st)
-                    Tfield($zip, type: .zip)
-                }
+                .padding()
             }
             .padding()
         }
-        .padding()
     }
 }
 
@@ -83,4 +105,3 @@ struct TFieldExamples_Previews: PreviewProvider {
      case date  // mm/dd/yyyy
  }
  */
-
